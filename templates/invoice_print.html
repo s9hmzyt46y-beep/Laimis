@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sąskaita {{ invoice.invoice_number }} - Spausdinti</title>
+    <style>
+        /* A4 Paper Dimensions: 210mm x 297mm (8.27" x 11.69") */
+        /* Standard margins: 20mm (0.79") on all sides */
+        
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 12pt;
+            line-height: 1.4;
+            color: #000;
+            background: white;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        .invoice-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            background: white;
+        }
+        
+        /* Header Section */
+        .invoice-header {
+            text-align: center;
+            border-bottom: 3px solid #000;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .invoice-header h1 {
+            font-size: 20pt;
+            font-weight: bold;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .invoice-header h2 {
+            font-size: 14pt;
+            margin-top: 8px;
+            color: #000;
+            font-weight: normal;
+        }
+        
+        /* Two Columns: Seller and Buyer */
+        .two-columns {
+            display: table;
+            width: 100%;
+            margin-bottom: 25px;
+            border-collapse: separate;
+            border-spacing: 15px;
+        }
+        
+        .column {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            border: 1px solid #000;
+            padding: 12px;
+        }
+        
+        .column h3 {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+            padding-bottom: 4px;
+        }
+        
+        .column p {
+            margin: 4px 0;
+            font-size: 11pt;
+        }
+        
+        /* Invoice Details Section */
+        .invoice-details {
+            border: 1px solid #000;
+            padding: 12px;
+            margin-bottom: 25px;
+        }
+        
+        .invoice-details h3 {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+            padding-bottom: 4px;
+        }
+        
+        .details-row {
+            display: table;
+            width: 100%;
+            padding: 6px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        
+        .details-label {
+            display: table-cell;
+            font-weight: bold;
+            width: 40%;
+        }
+        
+        .details-value {
+            display: table-cell;
+            width: 60%;
+        }
+        
+        /* Items Table */
+        .items-section {
+            margin: 25px 0;
+        }
+        
+        .items-section h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            border: 2px solid #000;
+        }
+        
+        .items-table thead {
+            background-color: #f0f0f0;
+        }
+        
+        .items-table th {
+            padding: 8px 6px;
+            text-align: left;
+            border: 1px solid #000;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+            background-color: #f0f0f0;
+        }
+        
+        .items-table th.text-right {
+            text-align: right;
+        }
+        
+        .items-table td {
+            padding: 6px;
+            border: 1px solid #000;
+            font-size: 10pt;
+        }
+        
+        .items-table td.text-right {
+            text-align: right;
+        }
+        
+        .items-table tbody tr {
+            page-break-inside: avoid;
+        }
+        
+        /* Totals Section */
+        .totals-section {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .totals-box {
+            border: 2px solid #000;
+            padding: 15px;
+            text-align: right;
+            background-color: #f9f9f9;
+        }
+        
+        .total-line {
+            margin-bottom: 8px;
+            font-size: 11pt;
+        }
+        
+        .total-line:last-child {
+            margin-bottom: 0;
+        }
+        
+        .total-label {
+            display: inline-block;
+            min-width: 120px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        
+        .total-value {
+            display: inline-block;
+            min-width: 80px;
+            text-align: right;
+            font-weight: bold;
+        }
+        
+        .grand-total {
+            border-top: 2px solid #000;
+            padding-top: 10px;
+            margin-top: 10px;
+            font-size: 16pt;
+            font-weight: bold;
+        }
+        
+        /* Notes Section */
+        .notes-section {
+            border: 1px solid #000;
+            padding: 12px;
+            margin-top: 20px;
+        }
+        
+        .notes-section h3 {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+            padding-bottom: 4px;
+        }
+        
+        .notes-section p {
+            font-size: 10pt;
+        }
+        
+        /* Print-specific styles */
+        @media print {
+            body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .invoice-container {
+                page-break-after: avoid;
+            }
+            
+            .items-table {
+                page-break-inside: auto;
+            }
+            
+            .items-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            .totals-box {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <!-- Header: SĄSKAITA FAKTŪRA and Invoice Number -->
+        <div class="invoice-header">
+            <h1>SĄSKAITA FAKTŪRA</h1>
+            <h2>Nr. {{ invoice.invoice_number }}</h2>
+        </div>
+        
+        <!-- Two Columns: Pardavėjas (Seller) and Pirkėjas (Buyer) -->
+        <div class="two-columns">
+            <!-- Left Column: Pardavėjas (Seller) - Hardcoded -->
+            <div class="column">
+                <h3>Pardavėjas</h3>
+                <p><strong>Mano Startuolis UAB</strong></p>
+                <p>Vilnius, Lietuva</p>
+            </div>
+            
+            <!-- Right Column: Pirkėjas (Buyer) - From invoice.client relationship -->
+            <div class="column">
+                <h3>Pirkėjas</h3>
+                {% if invoice.client %}
+                    <p><strong>{{ invoice.client.name }}</strong></p>
+                    {% if invoice.client.email %}
+                        <p>{{ invoice.client.email }}</p>
+                    {% endif %}
+                    {% if invoice.client.phone %}
+                        <p>{{ invoice.client.phone }}</p>
+                    {% endif %}
+                    {% if invoice.client.address %}
+                        <p>{{ invoice.client.address }}</p>
+                    {% endif %}
+                    {% if invoice.client.company_code %}
+                        <p>Įmonės kodas: {{ invoice.client.company_code }}</p>
+                    {% endif %}
+                {% else %}
+                    <p>Klientas nerastas</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Invoice Details Section -->
+        <div class="invoice-details">
+            <h3>Sąskaitos informacija</h3>
+            <div class="details-row">
+                <span class="details-label">Sąskaitos data:</span>
+                <span class="details-value">{{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '-' }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Mokėjimo terminas:</span>
+                <span class="details-value">{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Būsena:</span>
+                <span class="details-value">{{ invoice.status }}</span>
+            </div>
+        </div>
+        
+        <!-- Items Table: Shows all line items on the invoice -->
+        <div class="items-section">
+            <h3>Sąskaitos eilutės</h3>
+            {% if invoice.items.count() > 0 %}
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Aprašymas</th>
+                            <th class="text-right">Kiekis</th>
+                            <th class="text-right">Vieneto kaina (€)</th>
+                            <th class="text-right">Suma be PVM (€)</th>
+                            <th class="text-right">PVM %</th>
+                            <th class="text-right">PVM Suma (€)</th>
+                            <th class="text-right">Viso su PVM (€)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in invoice.items.all() %}
+                        <tr>
+                            <td>{{ item.description }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.quantity) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.unit_price) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.calculate_subtotal()) }}</td>
+                            <td class="text-right">{{ item.vat_rate }}%</td>
+                            <td class="text-right">{{ "%.2f"|format(item.vat_amount) }}</td>
+                            <td class="text-right"><strong>{{ "%.2f"|format(item.total_with_vat) }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p style="padding: 15px; border: 1px solid #000; text-align: center;">
+                    Sąskaitoje nėra eilučių.
+                </p>
+            {% endif %}
+            
+            <!-- Totals Section - Breakdown with VAT -->
+            {% set breakdown = invoice.calculate_totals_breakdown() %}
+            <div class="totals-section">
+                <div class="totals-box">
+                    <div class="total-line">
+                        <span class="total-label">Suma be PVM:</span>
+                        <span class="total-value">{{ "%.2f"|format(breakdown['subtotal']) }} €</span>
+                    </div>
+                    <div class="total-line">
+                        <span class="total-label">PVM Suma:</span>
+                        <span class="total-value">{{ "%.2f"|format(breakdown['vat_total']) }} €</span>
+                    </div>
+                    <div class="total-line grand-total">
+                        <span class="total-label">VISO MOKĖTI:</span>
+                        <span class="total-value">{{ "%.2f"|format(breakdown['grand_total']) }} €</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notes (if any) -->
+        {% if invoice.notes %}
+        <div class="notes-section">
+            <h3>Pastabos</h3>
+            <p>{{ invoice.notes }}</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Auto-print script -->
+    <script>
+        window.onload = function() {
+            window.print();
+        };
+    </script>
+</body>
+</html>
+

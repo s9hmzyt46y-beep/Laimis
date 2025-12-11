@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Išlaidos - Mano Startuolis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .category-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .category-maistas { background-color: #28a745; }
+        .category-transportas { background-color: #007bff; }
+        .category-nuoma { background-color: #ffc107; }
+        .category-komunaliniai { background-color: #17a2b8; }
+        .category-biuras { background-color: #6f42c1; }
+        .category-paslaugos { background-color: #fd7e14; }
+        .category-kita { background-color: #6c757d; }
+        .balance-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .balance-card h3 {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        .balance-card .amount {
+            font-size: 32px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Išlaidos</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-link">← Grįžti</a>
+        </div>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Balance Card: Monthly Expenses -->
+        <div class="balance-card">
+            <h3>Viso išlaidų šį mėnesį</h3>
+            <div class="amount"><span id="monthly-total">0.00</span> €</div>
+        </div>
+        
+        <!-- Bulk Scanning Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">🚀 Masinis skenavimas</h5>
+            </div>
+            <div class="card-body">
+                <!-- Upload Area -->
+                <div class="mb-3">
+                    <label for="bulk-files" class="form-label">Pasirinkite failus (galima kelis)</label>
+                    <div class="input-group">
+                        <input type="file" 
+                               class="form-control" 
+                               id="bulk-files" 
+                               name="bulk-files" 
+                               multiple 
+                               accept=".jpg,.png,.jpeg">
+                        <button type="button" 
+                                class="btn btn-primary" 
+                                id="scanBulkBtn">
+                            🚀 Skenuoti failus
+                        </button>
+                    </div>
+                    <small class="form-text text-muted">
+                        Galite pasirinkti kelis failus vienu metu. AI automatiškai išskirstys kategorijas.
+                    </small>
+                    <div id="bulkScanStatus" class="mt-2" style="display: none;"></div>
+                </div>
+                
+                <!-- Staging Table (initially hidden) -->
+                <div id="staging-section" style="display: none;">
+                    <h6 class="mb-3">Peržiūrėti prieš išsaugant:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="staging-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tiekėjas</th>
+                                    <th>Kategorija</th>
+                                    <th>Kaina be PVM</th>
+                                    <th>PVM</th>
+                                    <th>Suma</th>
+                                    <th>Failas</th>
+                                    <th>Veiksmai</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staging-table-body">
+                                <!-- Rows will be added here by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" 
+                                class="btn btn-success" 
+                                onclick="window.saveAllToInstantDB()">
+                            💾 Išsaugoti viską
+                        </button>
+                        <button type="button" 
+                                class="btn btn-secondary" 
+                                id="clearStagingBtn">
+                            🗑️ Išvalyti
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- Left Column: Add Expense Form -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Pridėti išlaidą</h5>
+                    </div>
+                    <div class="card-body">
+                        {# 
+                            FORM ENCTYPE:
+                            =============
+                            
+                            CRITICAL: enctype="multipart/form-data" is REQUIRED for file uploads!
+                            
+                            Without this attribute:
+                            - File uploads will NOT work
+                            - request.files will be empty
+                            - Files cannot be uploaded
+                            
+                            With this attribute:
+                            - Browser sends files as multipart data
+                            - Flask can access files via request.files
+                            - Files can be saved to server
+                        #}
+                        <form method="POST" action="{{ url_for('expenses') }}" enctype="multipart/form-data">
+                            <!-- Date Input -->
+                            <div class="mb-3">
+                                <label for="date" class="form-label">Data <span class="text-danger">*</span></label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="date" 
+                                       name="date" 
+                                       value="{{ today.strftime('%Y-%m-%d') if today else '' }}"
+                                       required>
+                            </div>
+                            
+                            <!-- Vendor Input -->
+                            <div class="mb-3">
+                                <label for="vendor" class="form-label">Tiekėjas <span class="text-danger">*</span></label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="vendor" 
+                                       name="vendor" 
+                                       placeholder="pvz., Maxima, Circle K"
+                                       required>
+                            </div>
+                            
+                            <!-- Category Dropdown -->
+                            <div class="mb-3">
+                                <label for="category" class="form-label">Kategorija <span class="text-danger">*</span></label>
+                                <select class="form-select" id="category" name="category" required>
+                                    <option value="">-- Pasirinkite kategoriją --</option>
+                                    <option value="Maistas">Maistas</option>
+                                    <option value="Transportas">Transportas</option>
+                                    <option value="Nuoma">Nuoma</option>
+                                    <option value="Komunaliniai">Komunaliniai</option>
+                                    <option value="Biuras">Biuras</option>
+                                    <option value="Švara">Švara</option>
+                                    <option value="Paslaugos">Paslaugos</option>
+                                    <option value="Kiti">Kiti</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Amount Input -->
+                            <div class="mb-3">
+                                <label for="amount" class="form-label">Suma (€) <span class="text-danger">*</span></label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="amount" 
+                                       name="amount" 
+                                       step="0.01" 
+                                       min="0.01" 
+                                       placeholder="0.00"
+                                       required>
+                            </div>
+                            
+                            <!-- Description Input (Optional) -->
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Aprašymas</label>
+                                <textarea class="form-control" 
+                                          id="description" 
+                                          name="description" 
+                                          rows="2" 
+                                          placeholder="Papildoma informacija apie išlaidą"></textarea>
+                            </div>
+                            
+                            <!-- File Upload -->
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Čekis / Sąskaita</label>
+                                <div class="input-group">
+                                    <input type="file" 
+                                           class="form-control" 
+                                           id="file" 
+                                           name="file" 
+                                           accept=".pdf, .jpg, .jpeg, .png">
+                                    <button type="button" 
+                                            class="btn btn-outline-primary" 
+                                            id="scanAiBtn"
+                                            title="Automatiškai užpildyti formą naudojant AI">
+                                        ✨ Skenuoti su AI
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Leidžiami formatai: JPG, PNG, PDF
+                                </small>
+                                <div id="scanStatus" class="mt-2" style="display: none;"></div>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <button type="submit" class="btn btn-primary w-100">Pridėti išlaidą</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Expenses Table -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Išlaidų sąrašas ({{ expenses|length }})</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if expenses %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Tiekėjas</th>
+                                            <th>Kategorija</th>
+                                            <th class="text-end">Suma</th>
+                                            <th class="text-center">Čekis</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="expenses-list">
+                                        <!-- Filled dynamically via InstantDB -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <p class="mb-0">Dar nėra pridėtų išlaidų. Naudokite formą kairėje, kad pridėtumėte pirmąją išlaidą.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        /**
+         * AI Receipt Scanning Feature
+         * 
+         * This script handles automatic form filling using OpenAI Vision API.
+         * When a user selects a receipt image and clicks "Skenuoti su AI",
+         * it sends the image to the backend, receives extracted data, and
+         * automatically fills the form fields.
+         */
+        
+        // Get references to form elements
+        const fileInput = document.getElementById('file');
+        const scanBtn = document.getElementById('scanAiBtn');
+        const scanStatus = document.getElementById('scanStatus');
+        const vendorInput = document.getElementById('vendor');
+        const dateInput = document.getElementById('date');
+        const categorySelect = document.getElementById('category');
+        const amountInput = document.getElementById('amount');
+        
+        /**
+         * Show status message to user
+         * @param {string} message - Message to display
+         * @param {string} type - Type: 'success', 'error', or 'info'
+         */
+        function showStatus(message, type = 'info') {
+            scanStatus.style.display = 'block';
+            
+            // Remove existing classes
+            scanStatus.className = 'mt-2';
+            
+            // Add appropriate styling based on type
+            if (type === 'success') {
+                scanStatus.className += ' alert alert-success';
+                scanStatus.innerHTML = `<small>✓ ${message}</small>`;
+            } else if (type === 'error') {
+                scanStatus.className += ' alert alert-danger';
+                scanStatus.innerHTML = `<small>✗ ${message}</small>`;
+            } else {
+                scanStatus.className += ' alert alert-info';
+                scanStatus.innerHTML = `<small>${message}</small>`;
+            }
+        }
+        
+        /**
+         * Hide status message
+         */
+        function hideStatus() {
+            scanStatus.style.display = 'none';
+        }
+        
+        /**
+         * Set button state and text
+         * @param {string} state - 'idle', 'loading', or 'success'
+         */
+        function setButtonState(state) {
+            if (state === 'loading') {
+                scanBtn.disabled = true;
+                scanBtn.classList.add('disabled');
+                scanBtn.innerHTML = '⏳ Analizuojama...';
+            } else if (state === 'success') {
+                scanBtn.disabled = true;
+                scanBtn.classList.add('disabled');
+                scanBtn.innerHTML = '✅ Atlikta!';
+            } else {
+                // 'idle' - default state
+                scanBtn.disabled = false;
+                scanBtn.classList.remove('disabled');
+                scanBtn.innerHTML = '✨ Skenuoti su AI';
+            }
+        }
+        
+        /**
+         * Fill form fields with extracted data (fail-safe version)
+         * Uses name attributes for reliable element selection
+         * Adds visual feedback with yellow background
+         * @param {Object} data - Extracted data object with vendor, date, amount, category
+         */
+        function fillForm(data) {
+            // Fill vendor field
+            if (data.vendor) {
+                const vendorField = document.querySelector('[name="vendor"]');
+                if (vendorField) {
+                    vendorField.value = data.vendor;
+                    // Visual feedback: yellow background
+                    vendorField.style.backgroundColor = '#fff3cd';
+                    setTimeout(() => {
+                        vendorField.style.backgroundColor = '';
+                        vendorField.classList.add('border-success');
+                        setTimeout(() => vendorField.classList.remove('border-success'), 2000);
+                    }, 2000);
+                }
+            }
+            
+            // Fill amount field
+            if (data.amount) {
+                const amountField = document.querySelector('[name="amount"]');
+                if (amountField) {
+                    // Convert amount to number if needed
+                    const numAmount = parseFloat(data.amount);
+                    if (!isNaN(numAmount)) {
+                        amountField.value = numAmount.toFixed(2);
+                    } else {
+                        amountField.value = data.amount;
+                    }
+                    // Visual feedback: yellow background
+                    amountField.style.backgroundColor = '#fff3cd';
+                    setTimeout(() => {
+                        amountField.style.backgroundColor = '';
+                        amountField.classList.add('border-success');
+                        setTimeout(() => amountField.classList.remove('border-success'), 2000);
+                    }, 2000);
+                }
+            }
+            
+            // Fill date field
+            if (data.date) {
+                const dateField = document.querySelector('[name="date"]');
+                if (dateField) {
+                    dateField.value = data.date;
+                    // Visual feedback: yellow background
+                    dateField.style.backgroundColor = '#fff3cd';
+                    setTimeout(() => {
+                        dateField.style.backgroundColor = '';
+                        dateField.classList.add('border-success');
+                        setTimeout(() => dateField.classList.remove('border-success'), 2000);
+                    }, 2000);
+                }
+            }
+            
+            // Select category in dropdown
+            if (data.category) {
+                const categoryField = document.querySelector('[name="category"]');
+                if (categoryField) {
+                    // Try to find matching option
+                    const options = categoryField.options;
+                    let found = false;
+                    for (let i = 0; i < options.length; i++) {
+                        if (options[i].value === data.category) {
+                            categoryField.value = data.category;
+                            found = true;
+                            break;
+                        }
+                    }
+                    // If not found, default to 'Kiti'
+                    if (!found) {
+                        categoryField.value = 'Kiti';
+                    }
+                    // Visual feedback: yellow background
+                    categoryField.style.backgroundColor = '#fff3cd';
+                    setTimeout(() => {
+                        categoryField.style.backgroundColor = '';
+                        categoryField.classList.add('border-success');
+                        setTimeout(() => categoryField.classList.remove('border-success'), 2000);
+                    }, 2000);
+                }
+            }
+        }
+        
+        /**
+         * Handle AI scan button click
+         */
+        scanBtn.addEventListener('click', async function() {
+            // Check if file is selected
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Prašome pasirinkti failą prieš skenuojant!');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                alert('Netinkamas failo formatas! Leidžiami formatai: JPG, PNG, GIF, WEBP');
+                return;
+            }
+            
+            // Change button to loading state
+            setButtonState('loading');
+            showStatus('Skenuojama... Palaukite.', 'info');
+            
+            try {
+                // Create FormData to send file
+                const formData = new FormData();
+                formData.append('file', file);  // Note: route expects 'file', not 'image'
+                
+                // Send request to backend
+                const response = await fetch('/scan-receipt', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                // Check if response is OK - CRITICAL for error debugging
+                if (!response.ok) {
+                    let errorData = await response.json();
+                    const errorMsg = errorData.error || 'Nežinoma klaida';
+                    alert("KLAIDA: " + errorMsg);
+                    showStatus('Klaida: ' + errorMsg, 'error');
+                    setButtonState('idle');  // Reset to original state
+                    return;
+                }
+                
+                // Parse JSON response
+                const data = await response.json();
+                
+                // Logging: Debug AI response data
+                console.log("AI DATA:", data);
+                
+                // Check if request was successful
+                // Note: Simplified route returns data directly, not wrapped in success/data
+                if (data.vendor || data.date || data.amount) {
+                    // Robustly fill the fields
+                    if (data.vendor) {
+                        const vendorField = document.querySelector('[name="vendor"]');
+                        if (vendorField) {
+                            vendorField.value = data.vendor;
+                            vendorField.style.backgroundColor = '#fff3cd';
+                            setTimeout(() => vendorField.style.backgroundColor = '', 2000);
+                        }
+                    }
+                    
+                    if (data.amount) {
+                        const amountField = document.querySelector('[name="amount"]');
+                        if (amountField) {
+                            const numAmount = parseFloat(data.amount);
+                            if (!isNaN(numAmount)) {
+                                amountField.value = numAmount.toFixed(2);
+                            } else {
+                                amountField.value = data.amount;
+                            }
+                            amountField.style.backgroundColor = '#fff3cd';
+                            setTimeout(() => amountField.style.backgroundColor = '', 2000);
+                        }
+                    }
+                    
+                    if (data.date) {
+                        const dateField = document.querySelector('[name="date"]');
+                        if (dateField) {
+                            dateField.value = data.date;
+                            dateField.style.backgroundColor = '#fff3cd';
+                            setTimeout(() => dateField.style.backgroundColor = '', 2000);
+                        }
+                    }
+                    
+                    if (data.category) {
+                        const categoryField = document.querySelector('[name="category"]');
+                        if (categoryField) {
+                            categoryField.value = data.category;
+                            categoryField.style.backgroundColor = '#fff3cd';
+                            setTimeout(() => categoryField.style.backgroundColor = '', 2000);
+                        }
+                    }
+                    
+                    // Also call fillForm for additional visual feedback
+                    fillForm(data);
+                    
+                    // Show success message
+                    showStatus('Duomenys sėkmingai išgauti ir užpildyti!', 'success');
+                    
+                    // Change button to success state
+                    setButtonState('success');
+                    
+                    // Re-enable button after 2 seconds
+                    setTimeout(() => {
+                        setButtonState('idle');
+                        hideStatus();
+                    }, 2000);
+                } else if (result.error) {
+                    // Error in response
+                    alert("KLAIDA: " + result.error);
+                    showStatus(result.error, 'error');
+                    setButtonState('idle');  // Reset to original state
+                } else {
+                    // Unexpected response format
+                    alert("KLAIDA: Nepavyko išgauti duomenų iš čekio");
+                    showStatus('Nepavyko išgauti duomenų iš čekio', 'error');
+                    setButtonState('idle');  // Reset to original state
+                }
+            } catch (error) {
+                // Handle network or other errors
+                console.error('Scan error:', error);
+                const errorMsg = error.message || 'Nepavyko susisiekti su serveriu';
+                showStatus('Klaida siunčiant užklausą. Patikrinkite interneto ryšį.', 'error');
+                alert("KLAIDA: " + errorMsg);
+                setButtonState('idle');  // Reset to original state
+            }
+        });
+        
+        /**
+         * Optional: Auto-enable scan button when file is selected
+         */
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0) {
+                // File selected - button is already enabled by default
+                hideStatus(); // Clear any previous status
+            }
+        });
+        
+        /**
+         * ========================================
+         * BULK SCANNING FUNCTIONALITY
+         * ========================================
+         */
+        
+        // Get references to bulk scanning elements
+        const bulkFilesInput = document.getElementById('bulk-files');
+        const scanBulkBtn = document.getElementById('scanBulkBtn');
+        const bulkScanStatus = document.getElementById('bulkScanStatus');
+        const stagingSection = document.getElementById('staging-section');
+        const stagingTableBody = document.getElementById('staging-table-body');
+        const saveAllBtn = document.getElementById('saveAllBtn');
+        const clearStagingBtn = document.getElementById('clearStagingBtn');
+        
+        // Valid categories for dropdown
+        const validCategories = ['Maistas', 'Transportas', 'Nuoma', 'Komunaliniai', 'Biuras', 'Švara', 'Paslaugos', 'Kiti'];
+        
+        /**
+         * Show status message for bulk scanning
+         */
+        function showBulkStatus(message, type = 'info') {
+            bulkScanStatus.style.display = 'block';
+            bulkScanStatus.className = 'mt-2 alert';
+            if (type === 'success') {
+                bulkScanStatus.classList.add('alert-success');
+            } else if (type === 'error') {
+                bulkScanStatus.classList.add('alert-danger');
+            } else {
+                bulkScanStatus.classList.add('alert-info');
+            }
+            bulkScanStatus.innerHTML = `<small>${message}</small>`;
+        }
+        
+        /**
+         * Add a row to the staging table
+         * @param {Object} item - Item data with vendor, date, amount, category
+         * @param {string} filename - Filename for the file link
+         */
+        function addStagingRow(item, filename) {
+            const row = document.createElement('tr');
+            row.className = 'staging-row';
+            
+            // Generate unique ID for this row
+            const rowId = 'staging-row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            row.id = rowId;
+            
+            // Store filename in data attribute for later retrieval
+            row.setAttribute('data-filename', filename || '');
+            
+            // Date input
+            const dateCell = document.createElement('td');
+            dateCell.innerHTML = `<input type="date" class="form-control form-control-sm" name="date" value="${item.date || ''}" required>`;
+            
+            // Vendor input
+            const vendorCell = document.createElement('td');
+            vendorCell.innerHTML = `<input type="text" class="form-control form-control-sm" name="vendor" value="${item.vendor || ''}" required>`;
+            
+            // Category select
+            const categoryCell = document.createElement('td');
+            const selectInput = document.createElement('select');
+            selectInput.className = 'form-select form-select-sm';
+            selectInput.name = 'category';
+            selectInput.required = true;
+            
+            // Add default option
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '-- Pasirinkite --';
+            selectInput.appendChild(defaultOption);
+            
+            // Add category options - ensure values match AI output exactly
+            validCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;  // Exact match with AI output
+                option.textContent = cat;
+                selectInput.appendChild(option);
+            });
+            
+            // CRITICAL: Set the selected value immediately after creating the select element
+            const categoryValue = item.category || 'Kiti';
+            selectInput.value = categoryValue;
+            
+            // Debug logging
+            console.log("Setting category for item:", item.description || item.vendor || 'Unknown', "to", categoryValue, "(original:", item.category, ")");
+            
+            categoryCell.appendChild(selectInput);
+            
+            // Net Amount input (Kaina be PVM)
+            const netAmountCell = document.createElement('td');
+            const netAmountValue = item.net_amount ? parseFloat(item.net_amount).toFixed(2) : (item.amount ? (parseFloat(item.amount) / 1.21).toFixed(2) : '');
+            const netAmountInput = document.createElement('input');
+            netAmountInput.type = 'number';
+            netAmountInput.className = 'form-control form-control-sm';
+            netAmountInput.name = 'net_amount';
+            netAmountInput.step = '0.01';
+            netAmountInput.min = '0';
+            netAmountInput.value = netAmountValue;
+            netAmountInput.required = true;
+            netAmountCell.appendChild(netAmountInput);
+            
+            // VAT Amount input (PVM)
+            const vatAmountCell = document.createElement('td');
+            const vatAmountValue = item.vat_amount ? parseFloat(item.vat_amount).toFixed(2) : (item.amount ? (parseFloat(item.amount) - parseFloat(item.amount) / 1.21).toFixed(2) : '');
+            const vatAmountInput = document.createElement('input');
+            vatAmountInput.type = 'number';
+            vatAmountInput.className = 'form-control form-control-sm';
+            vatAmountInput.name = 'vat_amount';
+            vatAmountInput.step = '0.01';
+            vatAmountInput.min = '0';
+            vatAmountInput.value = vatAmountValue;
+            vatAmountInput.required = true;
+            vatAmountCell.appendChild(vatAmountInput);
+            
+            // Total Amount input (Suma)
+            const amountCell = document.createElement('td');
+            const amountValue = item.amount || item.total_amount ? parseFloat(item.amount || item.total_amount).toFixed(2) : '';
+            const amountInput = document.createElement('input');
+            amountInput.type = 'number';
+            amountInput.className = 'form-control form-control-sm';
+            amountInput.name = 'amount';
+            amountInput.step = '0.01';
+            amountInput.min = '0.01';
+            amountInput.value = amountValue;
+            amountInput.required = true;
+            amountCell.appendChild(amountInput);
+            
+            // Auto-calculation logic: Net + VAT = Total
+            function updateTotal() {
+                const net = parseFloat(netAmountInput.value) || 0;
+                const vat = parseFloat(vatAmountInput.value) || 0;
+                const total = net + vat;
+                amountInput.value = total.toFixed(2);
+            }
+            
+            // Auto-calculation logic: Total -> estimate VAT and Net
+            function updateFromTotal() {
+                const total = parseFloat(amountInput.value) || 0;
+                if (total > 0) {
+                    // Estimate: assume 21% VAT (standard in Lithuania)
+                    const estimatedNet = total / 1.21;
+                    const estimatedVat = total - estimatedNet;
+                    netAmountInput.value = estimatedNet.toFixed(2);
+                    vatAmountInput.value = estimatedVat.toFixed(2);
+                }
+            }
+            
+            // Event listeners for auto-calculation
+            netAmountInput.addEventListener('input', updateTotal);
+            vatAmountInput.addEventListener('input', updateTotal);
+            amountInput.addEventListener('input', updateFromTotal);
+            
+            // File link
+            const fileCell = document.createElement('td');
+            fileCell.innerHTML = `<a href="/uploads/${filename}" target="_blank" class="btn btn-sm btn-outline-primary">📄 Peržiūrėti</a>`;
+            
+            // Actions (Remove button)
+            const actionsCell = document.createElement('td');
+            actionsCell.innerHTML = `<button type="button" class="btn btn-sm btn-danger" onclick="removeStagingRow('${rowId}')">🗑️ Pašalinti</button>`;
+            
+            // Append cells to row
+            row.appendChild(dateCell);
+            row.appendChild(vendorCell);
+            row.appendChild(categoryCell);
+            row.appendChild(netAmountCell);
+            row.appendChild(vatAmountCell);
+            row.appendChild(amountCell);
+            row.appendChild(fileCell);
+            row.appendChild(actionsCell);
+            
+            // Append row to table
+            stagingTableBody.appendChild(row);
+        }
+        
+        /**
+         * Remove a staging row
+         * @param {string} rowId - ID of the row to remove
+         */
+        window.removeStagingRow = function(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) {
+                row.remove();
+                // Hide staging section if no rows left
+                if (stagingTableBody.children.length === 0) {
+                    stagingSection.style.display = 'none';
+                }
+            }
+        };
+        
+        /**
+         * Clear all staging rows
+         */
+        function clearStagingTable() {
+            stagingTableBody.innerHTML = '';
+            stagingSection.style.display = 'none';
+        }
+        
+        /**
+         * Handle bulk scan button click
+         */
+        scanBulkBtn.addEventListener('click', async function() {
+            // Check if files are selected
+            if (!bulkFilesInput.files || bulkFilesInput.files.length === 0) {
+                alert('Prašome pasirinkti bent vieną failą!');
+                return;
+            }
+            
+            const files = Array.from(bulkFilesInput.files);
+            
+            // Validate file types
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            const invalidFiles = files.filter(f => !allowedTypes.includes(f.type));
+            if (invalidFiles.length > 0) {
+                alert('Kai kurie failai netinkamo formato! Leidžiami formatai: JPG, PNG');
+                return;
+            }
+            
+            // Show loading state
+            scanBulkBtn.disabled = true;
+            scanBulkBtn.innerHTML = '⏳ Skenuojama...';
+            showBulkStatus(`Skenuojama ${files.length} failų...`, 'info');
+            
+            // Show staging section
+            stagingSection.style.display = 'block';
+            
+            try {
+                // Process files sequentially (to avoid overwhelming the server)
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    showBulkStatus(`Skenuojama failas ${i + 1} iš ${files.length}: ${file.name}`, 'info');
+                    
+                    // Create FormData
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    // Send to backend
+                    const response = await fetch('/scan-receipt', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error(`Error scanning ${file.name}:`, errorData);
+                        showBulkStatus(`Klaida skenuojant ${file.name}: ${errorData.error}`, 'error');
+                        continue; // Skip to next file
+                    }
+                    
+                    // Parse response
+                    const result = await response.json();
+                    console.log(`AI DATA for ${file.name}:`, result);
+                    
+                    // Handle response: backend returns {filename, items: [...]}
+                    if (result.items && Array.isArray(result.items)) {
+                        // Add each item as a row in staging table
+                        result.items.forEach(item => {
+                            addStagingRow(item, result.filename);
+                        });
+                    } else {
+                        console.warn(`Unexpected response format for ${file.name}:`, result);
+                    }
+                }
+                
+                // Show success message
+                const totalRows = stagingTableBody.children.length;
+                showBulkStatus(`Skenavimas baigtas! Rastos ${totalRows} išlaidos.`, 'success');
+                
+            } catch (error) {
+                console.error('Bulk scan error:', error);
+                showBulkStatus(`Klaida: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                scanBulkBtn.disabled = false;
+                scanBulkBtn.innerHTML = '🚀 Skenuoti failus';
+            }
+        });
+        
+        /**
+         * Handle "Save All" button click
+         * NOTE: This is now handled by window.saveAllToInstantDB in the module script
+         * The button onclick is assigned in the InstantDB module script at the bottom
+         */
+        
+        /**
+         * Handle "Clear" button click
+         */
+        clearStagingBtn.addEventListener('click', function() {
+            if (confirm('Ar tikrai norite išvalyti visus duomenis?')) {
+                clearStagingTable();
+            }
+        });
+    </script>
+
+    <!-- InstantDB integration -->
+    <script type="module">
+      import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
+
+      // ⚠️ ČIA ĮKLIJUOKITE SAVO ID ⚠️
+      const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb'; 
+
+      // 1. Prisijungimas
+      let db;
+      try {
+          db = init({ appId: APP_ID });
+          window.db = db;
+          window.tx = tx;
+          window.id = id;
+          console.log("✅ DB Prisijungta");
+      } catch (e) {
+          alert("Klaida jungiantis prie DB: " + e.message);
+      }
+
+      // 2. Duomenų klausymas (kad rodytų sąrašą apačioje)
+      if (db) {
+          db.subscribeQuery({ expenses: {} }, (resp) => {
+              if (resp.error) return;
+              renderMainTable(resp.data.expenses);
+          });
+      }
+
+      // 3. Pagrindinės lentelės piešimas
+      function renderMainTable(expenses) {
+          const tbody = document.getElementById('expenses-list');
+          if (!tbody) return;
+          tbody.innerHTML = '';
+          
+          const sorted = expenses ? expenses.sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+          let total = 0;
+
+          sorted.forEach(exp => {
+              total += (parseFloat(exp.amount) || 0);
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                  <td>${exp.date}</td>
+                  <td>${exp.vendor}</td>
+                  <td>${exp.category}</td>
+                  <td>${parseFloat(exp.net || 0).toFixed(2)}</td>
+                  <td>${parseFloat(exp.vat || 0).toFixed(2)}</td>
+                  <td><strong>${parseFloat(exp.amount || 0).toFixed(2)}</strong></td>
+                  <td>${exp.fileUrl ? '<a href="'+exp.fileUrl+'" target="_blank">Failas</a>' : '-'}</td>
+              `;
+              tbody.appendChild(row);
+          });
+          
+          const totalEl = document.getElementById('monthly-total');
+          if (totalEl) totalEl.innerText = total.toFixed(2);
+      }
+
+      // 4. IŠSAUGOJIMO FUNKCIJA (Svarbiausia dalis)
+      window.saveAllToInstantDB = function() {
+          // 1 Testas: Ar funkcija pasileidžia?
+          alert("1. Pradedamas saugojimas...");
+
+          if (!window.db) {
+              alert("KLAIDA: Nėra ryšio su duomenų baze!");
+              return;
+          }
+
+          const rows = document.querySelectorAll('#staging-table tbody tr');
+          alert("2. Rasta eilučių lentelėje: " + rows.length);
+
+          if (rows.length === 0) {
+              alert("Lentelė tuščia, nėra ką saugoti.");
+              return;
+          }
+
+          const txs = [];
+          let errors = [];
+
+          rows.forEach((row, index) => {
+              try {
+                  // Bandome surasti laukelius
+                  const dateEl = row.querySelector('[name="date"]');
+                  const vendorEl = row.querySelector('[name="vendor"]');
+                  const categoryEl = row.querySelector('[name="category"]');
+                  const amountEl = row.querySelector('[name="amount"]'); // Bendra suma
+                  const netEl = row.querySelector('[name="net_amount"]'); // Be PVM
+                  const vatEl = row.querySelector('[name="vat_amount"]'); // PVM
+
+                  // Jei kurio nors laukelio nėra, pranešame
+                  if (!dateEl || !vendorEl || !amountEl) {
+                      throw new Error(`Eilutėje ${index+1} trūksta pagrindinių laukelių (date, vendor arba amount)`);
+                  }
+
+                  const newId = window.id();
+                  
+                  // Išsaugome failo nuorodą, jei ji yra
+                  const fileLink = row.querySelector('a'); 
+                  const fileUrl = fileLink ? fileLink.href : null;
+
+                  txs.push(window.tx.expenses[newId].update({
+                      date: dateEl.value,
+                      vendor: vendorEl.value,
+                      category: categoryEl.value,
+                      amount: parseFloat(amountEl.value) || 0,
+                      net: parseFloat(netEl ? netEl.value : 0) || 0,
+                      vat: parseFloat(vatEl ? vatEl.value : 0) || 0,
+                      fileUrl: fileUrl,
+                      createdAt: new Date().toISOString()
+                  }));
+
+              } catch (err) {
+                  errors.push(err.message);
+              }
+          });
+
+          if (errors.length > 0) {
+              alert("Klaida skaitant duomenis:\n" + errors.join("\n"));
+              return;
+          }
+
+          alert("3. Paruošta siuntimui. Siunčiama į DB...");
+
+          window.db.transact(txs)
+              .then(() => {
+                  alert("✅ SĖKMĖ! Duomenys išsaugoti.");
+                  document.querySelector('#staging-table tbody').innerHTML = ''; // Išvalom
+                  document.getElementById('staging-table').style.display = 'none'; // Paslepiam
+              })
+              .catch(err => {
+                  alert("❌ KLAIDA SAUGANT Į DB: " + err.message);
+                  console.error(err);
+              });
+      };
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,26 @@
+╔══════════════════════════════════════════════════════╗
+║  KAIP PALEISTI PROGRAMĄ - 3 PAPRASTI BŪDAI          ║
+╚══════════════════════════════════════════════════════╝
+
+BŪDAS 1 (PAPRASČIAUSIAS):
+─────────────────────────
+Dukart spustelėkite failą: PALEISTI.command
+
+BŪDAS 2 (Terminale):
+────────────────────
+python3 start.py
+
+BŪDAS 3 (Su GUI):
+─────────────────
+python3 launcher.py
+
+═══════════════════════════════════════════════════════
+
+PROGRAMA AUTOMATIŠKAI RAS LAISVĄ PORTĄ!
+
+Kai programa paleista, terminale bus rodomas adresas:
+http://localhost:XXXX (kur XXXX yra porto numeris)
+
+Paprastai tai bus: http://localhost:3000
+
+═══════════════════════════════════════════════════════

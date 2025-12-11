@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sąskaita {{ invoice.invoice_number }} - Mano Startuolis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Simple invoice styling */
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border: 1px solid #ddd;
+        }
+        .invoice-header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .invoice-header h1 {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+            text-transform: uppercase;
+        }
+        .invoice-header h2 {
+            font-size: 18px;
+            margin-top: 10px;
+            color: #666;
+        }
+        .two-columns {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .column {
+            flex: 1;
+            border: 1px solid #ddd;
+            padding: 15px;
+        }
+        .column h3 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .column p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .invoice-details {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .invoice-details h3 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        .details-label {
+            font-weight: bold;
+            width: 150px;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            border: 1px solid #ddd;
+        }
+        .items-table thead {
+            background-color: #f8f9fa;
+        }
+        .items-table th {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid #333;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+        .items-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .items-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        .items-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total-amount {
+            text-align: right;
+            background: #f8f9fa;
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .total-amount-label {
+            font-size: 14px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .total-amount-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+        .add-item-form {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 30px 0;
+            background: #f8f9fa;
+        }
+        .add-item-form h3 {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            flex: 1;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-select {
+            background-color: white;
+        }
+    </style>
+</head>
+<body style="background-color: #f5f5f5; padding: 20px 0;">
+    <div class="invoice-container">
+        <!-- Header: SĄSKAITA FAKTŪRA and Invoice Number -->
+        <div class="invoice-header">
+            <h1>SĄSKAITA FAKTŪRA</h1>
+            <h2>Nr. {{ invoice.invoice_number }}</h2>
+        </div>
+        
+        <!-- Two Columns: Pardavėjas (Seller) and Pirkėjas (Buyer) -->
+        <div class="two-columns">
+            <!-- Left Column: Pardavėjas (Seller) - Hardcoded -->
+            <div class="column">
+                <h3>Pardavėjas</h3>
+                <p><strong>Mano Startuolis UAB</strong></p>
+                <p>Vilnius, Lietuva</p>
+            </div>
+            
+            <!-- Right Column: Pirkėjas (Buyer) - From invoice.client relationship -->
+            <div class="column">
+                <h3>Pirkėjas</h3>
+                {# 
+                    ACCESSING CLIENT DATA VIA RELATIONSHIP:
+                    ======================================
+                    
+                    invoice.client automatically accesses the Client object
+                    linked by the foreign key (client_id).
+                    
+                    We can access all client properties:
+                    - invoice.client.name
+                    - invoice.client.email
+                    - invoice.client.phone
+                    - invoice.client.address
+                    - etc.
+                    
+                    This works because of the backref='client' relationship
+                    defined in the Client model.
+                #}
+                {% if invoice.client %}
+                    <p><strong>{{ invoice.client.name }}</strong></p>
+                    {% if invoice.client.email %}
+                        <p>{{ invoice.client.email }}</p>
+                    {% endif %}
+                    {% if invoice.client.phone %}
+                        <p>{{ invoice.client.phone }}</p>
+                    {% endif %}
+                    {% if invoice.client.address %}
+                        <p>{{ invoice.client.address }}</p>
+                    {% endif %}
+                    {% if invoice.client.company_code %}
+                        <p>Įmonės kodas: {{ invoice.client.company_code }}</p>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted">Klientas nerastas</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Invoice Details Section -->
+        <div class="invoice-details">
+            <h3>Sąskaitos informacija</h3>
+            <div class="details-row">
+                <span class="details-label">Sąskaitos data:</span>
+                <span>{{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '-' }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Mokėjimo terminas:</span>
+                <span>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Būsena:</span>
+                <span>
+                    {% if invoice.status == 'paid' %}
+                        <span class="badge bg-success">{{ invoice.status }}</span>
+                    {% elif invoice.status == 'overdue' %}
+                        <span class="badge bg-danger">{{ invoice.status }}</span>
+                    {% elif invoice.status == 'cancelled' %}
+                        <span class="badge bg-secondary">{{ invoice.status }}</span>
+                    {% else %}
+                        <span class="badge bg-warning">{{ invoice.status }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Veiksmai:</span>
+                <span>
+                    {# 
+                        Print/PDF Button:
+                        Opens the print view in a new tab
+                        Uses url_for() to generate the correct URL
+                        Styled as a secondary button for neutral appearance
+                    #}
+                    <a href="{{ url_for('print_invoice', id=invoice.id) }}" 
+                       class="btn btn-sm btn-secondary"
+                       target="_blank"
+                       title="Spausdinti sąskaitą arba išsaugoti kaip PDF">
+                        🖨️ Spausdinti / PDF
+                    </a>
+                </span>
+            </div>
+        </div>
+        
+        <!-- Date Settings Section: Form to update invoice dates -->
+        <div class="invoice-details" style="background-color: #f8f9fa; margin-bottom: 30px;">
+            <h3>Datų nustatymai</h3>
+            {# 
+                DATE UPDATE FORM:
+                =================
+                
+                This form allows users to update the due_date and payment_date for the invoice.
+                
+                FORM ACTION:
+                - Posts to /saskaita/<invoice.id>/update-dates
+                - Uses url_for() to generate the correct URL with invoice ID
+                
+                DATE INPUT FIELDS:
+                - type="date" creates a date picker in modern browsers
+                - Value format: YYYY-MM-DD (e.g., "2024-12-25")
+                - Empty value means no date set (will be converted to None in backend)
+                
+                PAYMENT DATE INDICATOR:
+                - If payment_date is set, show a green checkmark
+                - This provides visual feedback that invoice is paid
+            #}
+            <form method="POST" action="{{ url_for('update_invoice_dates', id=invoice.id) }}">
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="due_date" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Apmokėti iki:
+                        </label>
+                        <input type="date" 
+                               id="due_date" 
+                               name="due_date" 
+                               value="{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '' }}"
+                               class="form-control"
+                               style="width: 100%;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="payment_date" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Apmokėta:
+                            {# Show green checkmark if payment_date is set #}
+                            {% if invoice.payment_date %}
+                                <span style="color: #28a745; margin-left: 5px;" title="Sąskaita apmokėta">
+                                    ✓
+                                </span>
+                            {% endif %}
+                        </label>
+                        <input type="date" 
+                               id="payment_date" 
+                               name="payment_date" 
+                               value="{{ invoice.payment_date.strftime('%Y-%m-%d') if invoice.payment_date else '' }}"
+                               class="form-control"
+                               style="width: 100%;">
+                        {# Show payment date text if set #}
+                        {% if invoice.payment_date %}
+                            <small style="color: #28a745; display: block; margin-top: 5px;">
+                                Apmokėta: {{ invoice.payment_date.strftime('%Y-%m-%d') }}
+                            </small>
+                        {% endif %}
+                    </div>
+                    <div style="flex: 0 0 auto;">
+                        <button type="submit" 
+                                class="btn btn-primary"
+                                style="margin-top: 0;">
+                            Išsaugoti datas
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Items Table: Shows all line items on the invoice -->
+        <div style="margin: 30px 0;">
+            <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 15px; text-transform: uppercase;">Sąskaitos eilutės</h3>
+            {# 
+                ACCESSING INVOICE ITEMS VIA RELATIONSHIP:
+                =========================================
+                
+                invoice.items accesses all InvoiceItem objects linked to this invoice.
+                This works because of the relationship defined in the Invoice model:
+                items = db.relationship('InvoiceItem', backref='invoice', ...)
+                
+                We can iterate through items and access:
+                - item.description
+                - item.quantity
+                - item.unit_price
+                - item.calculate_subtotal() (method that calculates qty * price)
+                
+                Since items is lazy='dynamic', we need to call .all() to get the list.
+            #}
+            {% if invoice.items.count() > 0 %}
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Aprašymas</th>
+                            <th class="text-right">Kiekis</th>
+                            <th class="text-right">Vieneto kaina (€)</th>
+                            <th class="text-right">Suma be PVM (€)</th>
+                            <th class="text-right">PVM %</th>
+                            <th class="text-right">PVM Suma (€)</th>
+                            <th class="text-right">Viso su PVM (€)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in invoice.items.all() %}
+                        <tr>
+                            <td>{{ item.description }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.quantity) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.unit_price) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(item.calculate_subtotal()) }}</td>
+                            <td class="text-right">{{ item.vat_rate }}%</td>
+                            <td class="text-right">{{ "%.2f"|format(item.vat_amount) }}</td>
+                            <td class="text-right"><strong>{{ "%.2f"|format(item.total_with_vat) }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-muted" style="padding: 20px; border: 1px solid #ddd; background: #f8f9fa;">
+                    Sąskaitoje dar nėra eilučių. Pridėkite eilutę naudodami formą žemiau.
+                </p>
+            {% endif %}
+            
+            <!-- Totals Section - Breakdown with VAT -->
+            {# 
+                CALCULATE TOTALS BREAKDOWN:
+                ===========================
+                
+                We use invoice.calculate_totals_breakdown() which returns:
+                - subtotal: Sum of all items without VAT
+                - vat_total: Sum of all VAT amounts
+                - grand_total: Sum of all items with VAT
+                
+                This gives us a detailed breakdown for display.
+            #}
+            {% set breakdown = invoice.calculate_totals_breakdown() %}
+            <div class="total-amount">
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <div style="margin-bottom: 8px; font-size: 14px;">
+                        Suma be PVM: <strong>{{ "%.2f"|format(breakdown['subtotal']) }} €</strong>
+                    </div>
+                    <div style="margin-bottom: 8px; font-size: 14px;">
+                        PVM Suma: <strong>{{ "%.2f"|format(breakdown['vat_total']) }} €</strong>
+                    </div>
+                    <div style="border-top: 2px solid #333; padding-top: 10px; margin-top: 10px;">
+                        <div style="font-size: 24px; font-weight: bold;">
+                            VISO MOKĖTI: {{ "%.2f"|format(breakdown['grand_total']) }} €
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add Item Form: Form to add new line items to the invoice -->
+        <div class="add-item-form">
+            <h3>Pridėti naują eilutę</h3>
+            {# 
+                FORM ACTION:
+                ============
+                
+                The form posts to /saskaita/<invoice.id>/prideti-eilute
+                This route handles POST requests to add new InvoiceItem objects.
+                
+                The route expects:
+                - description (text)
+                - quantity (number)
+                - price (number)
+                
+                After adding, it redirects back to this page.
+            #}
+            <form method="POST" action="{{ url_for('add_invoice_item', id=invoice.id) }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="description">Aprašymas *</label>
+                        <input type="text" 
+                               id="description" 
+                               name="description" 
+                               required 
+                               placeholder="pvz., Web Development, Hosting, etc."
+                               maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity">Kiekis *</label>
+                        <input type="number" 
+                               id="quantity" 
+                               name="quantity" 
+                               required 
+                               step="0.01" 
+                               min="0.01" 
+                               placeholder="pvz., 10, 2.5"
+                               value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="price">Kaina (€) *</label>
+                        <input type="number" 
+                               id="price" 
+                               name="price" 
+                               required 
+                               step="0.01" 
+                               min="0" 
+                               placeholder="pvz., 50.00"
+                               value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="vat_rate">PVM Tarifas *</label>
+                        <select id="vat_rate" 
+                                name="vat_rate" 
+                                required 
+                                class="form-select">
+                            <option value="21" selected>21% (Standartinis)</option>
+                            <option value="9">9% (Sumažintas)</option>
+                            <option value="5">5% (Sumažintas)</option>
+                            <option value="0">0% (Be PVM)</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Pridėti eilutę</button>
+            </form>
+        </div>
+        
+        <!-- Notes (if any) -->
+        {% if invoice.notes %}
+        <div class="invoice-details" style="margin-top: 20px;">
+            <h3>Pastabos</h3>
+            <p>{{ invoice.notes }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- Back Button -->
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{{ url_for('saskaitos') }}" class="btn btn-secondary">← Grįžti į sąskaitų sąrašą</a>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

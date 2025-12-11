@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nauja sąskaita - Mano Startuolis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Sukurti naują sąskaitą</h1>
+        
+        <!-- Navigation link back to invoices list -->
+        <a href="{{ url_for('invoices_list') }}" class="btn btn-secondary mb-3">← Grįžti į sąskaitų sąrašą</a>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Create Invoice Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Sąskaitos informacija</h5>
+            </div>
+            <div class="card-body">
+                {# 
+                    HTML FORM DATA FLOW FOR SELECT DROPDOWN:
+                    =========================================
+                    
+                    HOW THE SELECT WORKS:
+                    --------------------
+                    1. HTML select name="client_id" creates a dropdown
+                    2. Each option value="1" displays client name but sends client.id
+                    3. When user selects "John Doe" (id=1), browser sends: client_id=1
+                    4. Flask receives: request.form.get('client_id') = "1" (as string)
+                    5. We convert to int: client_id = 1
+                    6. This integer becomes the foreign key: invoice.client_id = 1
+                    7. Database stores 1 in the client_id column
+                    8. SQLAlchemy relationship lets us access: invoice.client.name = "John Doe"
+                    
+                    WHY WE USE client.id AS VALUE:
+                    - The database needs the ID (integer) to create the foreign key
+                    - The user sees the name (readable), but we send the ID (what database needs)
+                    - This is the standard way to link records in relational databases
+                    
+                    FORM SUBMISSION FLOW:
+                    --------------------
+                    User fills form → Clicks Submit → POST to /invoices/new →
+                    Flask extracts client_id → Creates Invoice with client_id →
+                    Saves to database → Redirects to /invoices list
+                #}
+                <form method="POST" action="{{ url_for('create_invoice') }}">
+                    <div class="row">
+                        <!-- Client Selection Dropdown -->
+                        <div class="col-md-6 mb-3">
+                            <label for="client_id" class="form-label">Klientas <span class="text-danger">*</span></label>
+                            {# 
+                                SELECT DROPDOWN EXPLANATION:
+                                ============================
+                                
+                                select name="client_id":
+                                - name="client_id" means Flask receives this as request.form.get('client_id')
+                                - required attribute prevents submission without selection
+                                
+                                for client in clients loop:
+                                - Loops through all clients passed from Flask route
+                                - For each client, creates an option tag
+                                
+                                option value is client.id:
+                                - value is the client's ID (e.g., 1, 2, 3)
+                                - This is what gets sent to Flask when form is submitted
+                                - Even though user sees the name, browser sends the ID
+                                
+                                client.name is displayed:
+                                - This is what the user sees in the dropdown
+                                - Display text (readable) vs value (database ID)
+                                
+                                Example:
+                                - User sees: "John Doe"
+                                - Browser sends: client_id=1
+                                - Flask receives: request.form.get('client_id') = "1"
+                                - We convert to int: client_id = 1
+                                - Invoice is created with: invoice.client_id = 1
+                            #}
+                            <select class="form-select" id="client_id" name="client_id" required>
+                                <option value="">-- Pasirinkite klientą --</option>
+                                {% for client in clients %}
+                                <option value="{{ client.id }}">{{ client.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Pasirinkite klientą, kuriam sukuriama sąskaita
+                            </small>
+                        </div>
+                        
+                        <!-- Invoice Number -->
+                        <div class="col-md-6 mb-3">
+                            <label for="invoice_number" class="form-label">Sąskaitos numeris <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="invoice_number" name="invoice_number" 
+                                   required placeholder="PVZ: INV-2024-001">
+                            <small class="form-text text-muted">
+                                Unikalus sąskaitos numeris
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Invoice Date -->
+                        <div class="col-md-6 mb-3">
+                            <label for="invoice_date" class="form-label">Sąskaitos data <span class="text-danger">*</span></label>
+                            <!-- 
+                                HTML5 date input sends format: YYYY-MM-DD
+                                Flask receives as string and converts to date object
+                            -->
+                            <input type="date" class="form-control" id="invoice_date" name="invoice_date" 
+                                   required value="{{ today.strftime('%Y-%m-%d') if today else '' }}">
+                        </div>
+                        
+                        <!-- Due Date (Optional) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="due_date" class="form-label">Mokėjimo terminas</label>
+                            <input type="date" class="form-control" id="due_date" name="due_date">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Status -->
+                        <div class="col-md-6 mb-3">
+                            <label for="status" class="form-label">Būsena</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="pending" selected>Laukiama</option>
+                                <option value="paid">Apmokėta</option>
+                                <option value="overdue">Vėluoja</option>
+                                <option value="cancelled">Atšaukta</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Pastabos</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Papildoma informacija apie sąskaitą"></textarea>
+                    </div>
+                    
+                    <!-- Invoice Items Section -->
+                    <hr class="my-4">
+                    <h5 class="mb-3">Sąskaitos eilutės (Prekės / Paslaugos)</h5>
+                    
+                    {# 
+                        INVOICE ITEMS TABLE EXPLANATION:
+                        ===============================
+                        
+                        We use HTML array naming convention:
+                        - name="descriptions[]" - Flask receives as list
+                        - name="quantities[]" - Flask receives as list  
+                        - name="prices[]" - Flask receives as list
+                        
+                        When form is submitted:
+                        - Browser sends: descriptions[]=Item1&descriptions[]=Item2
+                        - Flask receives: request.form.getlist('descriptions[]') = ['Item1', 'Item2']
+                        
+                        This allows us to have multiple items in one form submission.
+                    #}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered" id="itemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 50%">Aprašymas</th>
+                                    <th style="width: 20%">Kiekis</th>
+                                    <th style="width: 20%">Kaina (€)</th>
+                                    <th style="width: 10%">Veiksmai</th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsTableBody">
+                                {# 
+                                    Initial empty row - user will add items using JavaScript
+                                    We start with one empty row so user can immediately start typing
+                                #}
+                                <tr class="item-row">
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" 
+                                               name="descriptions[]" 
+                                               placeholder="Pvz: Web dizainas" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               name="quantities[]" 
+                                               step="0.01" min="0" 
+                                               value="1" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               name="prices[]" 
+                                               step="0.01" min="0" 
+                                               placeholder="0.00" required>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-danger remove-item" 
+                                                onclick="removeItemRow(this)" title="Pašalinti eilutę">
+                                            ×
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="button" class="btn btn-success btn-sm mb-3" onclick="addItemRow()">
+                        + Pridėti eilutę
+                    </button>
+                    
+                    <div class="mb-3">
+                        <strong>Bendra suma: <span id="totalAmount">0.00</span> €</strong>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <hr class="my-4">
+                    <button type="submit" class="btn btn-primary">Sukurti sąskaitą</button>
+                    <a href="{{ url_for('invoices_list') }}" class="btn btn-secondary">Atšaukti</a>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Information Box -->
+        <div class="alert alert-info mt-3">
+            <strong>Pastaba:</strong> Naudokite mygtuką "+ Pridėti eilutę" norėdami pridėti daugiau prekių ar paslaugų. 
+            Bendra suma apskaičiuojama automatiškai.
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {# 
+        JAVASCRIPT FOR DYNAMIC ITEM ROWS:
+        ==================================
+        
+        This JavaScript adds interactivity to the invoice items table.
+        We use vanilla JavaScript (no frameworks) to keep it simple for beginners.
+    #}
+    <script>
+        /**
+         * Add a new row to the items table.
+         * 
+         * HOW IT WORKS:
+         * 1. We find the table body element (itemsTableBody)
+         * 2. We get the first row (template row)
+         * 3. We clone it using cloneNode(true) - true means clone all children too
+         * 4. We clear the input values in the cloned row
+         * 5. We append the cloned row to the table body
+         * 
+         * cloneNode() creates an exact copy of the HTML element
+         * This is simpler than building HTML strings manually
+         */
+        function addItemRow() {
+            // Get the table body where we'll add new rows
+            const tableBody = document.getElementById('itemsTableBody');
+            
+            // Get the first row as a template
+            // We'll clone this row to create new rows
+            const firstRow = tableBody.querySelector('.item-row');
+            
+            // cloneNode(true) creates a deep copy of the element
+            // true = clone all children (inputs, buttons, etc.)
+            // false = would only clone the row element without children
+            const newRow = firstRow.cloneNode(true);
+            
+            // Clear all input values in the new row
+            // This ensures the new row starts empty
+            const inputs = newRow.querySelectorAll('input');
+            inputs.forEach(input => {
+                if (input.type === 'number' && input.name === 'quantities[]') {
+                    input.value = '1'; // Default quantity to 1
+                } else {
+                    input.value = ''; // Clear other fields
+                }
+            });
+            
+            // Append the new row to the table body
+            // This adds it to the end of the table
+            tableBody.appendChild(newRow);
+            
+            // Update the total amount calculation
+            updateTotal();
+        }
+        
+        /**
+         * Remove a row from the items table.
+         * 
+         * HOW IT WORKS:
+         * 1. We receive the button element that was clicked (via 'this')
+         * 2. We find the parent <tr> element (the row)
+         * 3. We remove it from the DOM using remove()
+         * 
+         * @param {HTMLElement} button - The remove button that was clicked
+         */
+        function removeItemRow(button) {
+            // Find the table row (tr) that contains this button
+            // closest('tr') searches up the DOM tree to find the nearest <tr> ancestor
+            const row = button.closest('tr');
+            
+            // Check if there's more than one row
+            // We always want at least one row in the table
+            const tableBody = document.getElementById('itemsTableBody');
+            if (tableBody.querySelectorAll('.item-row').length > 1) {
+                // Remove the row from the DOM
+                row.remove();
+                
+                // Update the total amount calculation
+                updateTotal();
+            } else {
+                alert('Turite palikti bent vieną eilutę!');
+            }
+        }
+        
+        /**
+         * Calculate and display the total amount for all items.
+         * 
+         * HOW IT WORKS:
+         * 1. Get all quantity and price inputs
+         * 2. Loop through them in pairs (same index = same row)
+         * 3. Multiply quantity × price for each row
+         * 4. Sum all subtotals
+         * 5. Display the total
+         */
+        function updateTotal() {
+            // Get all quantity inputs
+            const quantities = document.querySelectorAll('input[name="quantities[]"]');
+            // Get all price inputs
+            const prices = document.querySelectorAll('input[name="prices[]"]');
+            
+            let total = 0;
+            
+            // Loop through all rows
+            // quantities.length should equal prices.length (one of each per row)
+            for (let i = 0; i < quantities.length; i++) {
+                // Get values and convert to numbers
+                // parseFloat handles decimal numbers (e.g., "1.5")
+                const quantity = parseFloat(quantities[i].value) || 0;
+                const price = parseFloat(prices[i].value) || 0;
+                
+                // Calculate subtotal for this row: quantity × price
+                const subtotal = quantity * price;
+                
+                // Add to total
+                total += subtotal;
+            }
+            
+            // Display total with 2 decimal places
+            // toFixed(2) formats number to 2 decimal places (e.g., 123.456 → "123.46")
+            document.getElementById('totalAmount').textContent = total.toFixed(2);
+        }
+        
+        // Add event listeners to all quantity and price inputs
+        // This updates the total automatically when user types
+        // We use event delegation - listen on the table body for all input changes
+        document.getElementById('itemsTableBody').addEventListener('input', function(e) {
+            // Check if the changed input is a quantity or price field
+            if (e.target.name === 'quantities[]' || e.target.name === 'prices[]') {
+                updateTotal();
+            }
+        });
+        
+        // Calculate initial total when page loads
+        // This handles the case where the first row has default values
+        updateTotal();
+    </script>
+</body>
+</html>
+

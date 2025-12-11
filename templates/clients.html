@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klientai - Mano Startuolis</title>
+    <!-- Bootstrap CSS from CDN - makes styling easy without writing custom CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Klientų valdymas</h1>
+        
+        <!-- Navigation -->
+        <div class="mb-3">
+            <a href="{{ url_for('index') }}" class="btn btn-link">← Pagrindinis</a>
+            <a href="{{ url_for('saskaitos') }}" class="btn btn-link">Sąskaitos →</a>
+        </div>
+        
+        <!-- Flash Messages Section -->
+        <!-- 
+            DATA FLOW: Flask flash() messages -> Jinja2 template -> HTML display
+            Flask stores messages in session, template retrieves and displays them
+            We check for messages and show them in colored alert boxes
+        -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Add New Client Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Pridėti naują klientą</h5>
+            </div>
+            <div class="card-body">
+                {# 
+                    HTML FORM EXPLANATION:
+                    =====================
+                    
+                    GET vs POST METHODS:
+                    -------------------
+                    
+                    GET method:
+                    - Used to retrieve/display data
+                    - Data appears in URL: ?name=John&email=john@example.com
+                    - Limited data size (URL length limits)
+                    - Can be bookmarked
+                    - Safe to refresh
+                    - Example: Visiting a page, searching
+                    
+                    POST method:
+                    - Used to submit/create data
+                    - Data sent in request body (not visible in URL)
+                    - Can send large amounts of data
+                    - Cannot be bookmarked
+                    - Should NOT be refreshed (would resubmit)
+                    - Example: Submitting forms, creating records
+                    
+                    WHY WE USE POST FOR FORMS:
+                    ------------------------
+                    - Forms often contain sensitive data (shouldn't be in URL)
+                    - Forms can be large (no URL length limit)
+                    - We want to prevent accidental resubmission
+                    - Standard practice for creating/updating data
+                    
+                    action="" means submit to the same URL (/klientai)
+                    method="POST" means send data in request body
+                #}
+                <form method="POST" action="{{ url_for('create_client') }}">
+                    <!-- CSRF protection would go here in production, but we skip it for simplicity -->
+                    
+                    <div class="row">
+                        <!-- Name Field (Required) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">Vardas / Pavadinimas <span class="text-danger">*</span></label>
+                            <!-- 
+                                name="name" means Flask will receive this as request.form.get('name')
+                                required attribute prevents form submission if empty (client-side validation)
+                            -->
+                            <input type="text" class="form-control" id="name" name="name" required 
+                                   placeholder="Įveskite kliento vardą arba įmonės pavadinimą">
+                        </div>
+                        
+                        <!-- Email Field (Optional) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">El. paštas</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   placeholder="klientas@example.com">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Phone Field (Optional) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Telefonas</label>
+                            <input type="text" class="form-control" id="phone" name="phone" 
+                                   placeholder="+370 600 00000">
+                        </div>
+                        
+                        <!-- Company Code Field (Optional) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="company_code" class="form-label">Įmonės kodas</label>
+                            <input type="text" class="form-control" id="company_code" name="company_code" 
+                                   placeholder="123456789">
+                        </div>
+                    </div>
+                    
+                    <!-- Address Field (Optional) -->
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Adresas</label>
+                        <!-- textarea for longer text input -->
+                        <textarea class="form-control" id="address" name="address" rows="2" 
+                                  placeholder="Gatvė, miestas, pašto kodas"></textarea>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-primary">
+                        Pridėti klientą
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Search Form -->
+        <div class="card mb-4">
+            <div class="card-body">
+                {# 
+                    SEARCH FORM EXPLANATION:
+                    =======================
+                    
+                    This form uses GET method to search for clients.
+                    GET is appropriate here because:
+                    - Search is a read operation (not creating/modifying data)
+                    - Search query appears in URL (?q=search_term) - can be bookmarked
+                    - Safe to refresh/repeat
+                    - No sensitive data being submitted
+                    
+                    action="/klientai" means submit to the same route
+                    method="GET" means data will be in URL query parameters
+                #}
+                <form method="get" action="{{ url_for('list_clients') }}" class="row g-3">
+                    <div class="col-md-10">
+                        <input type="text" 
+                               class="form-control" 
+                               id="q" 
+                               name="q" 
+                               placeholder="Ieškoti kliento..."
+                               value="{{ request.args.get('q', '') }}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Ieškoti
+                        </button>
+                    </div>
+                </form>
+                
+                {# Show "Clear Search" link if search is active #}
+                {% if request.args.get('q') %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('list_clients') }}" class="text-decoration-none">
+                            ✕ Išvalyti paiešką
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Clients List Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    Esami klientai ({{ clients|length }})
+                    {% if request.args.get('q') %}
+                        <span class="text-muted">- Paieška: "{{ request.args.get('q') }}"</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if clients %}
+                    {# 
+                        TEMPLATE DATA FLOW:
+                        ===================
+                        
+                        1. Flask route queries database: Client.query.all()
+                        2. Flask passes data to template: render_template('clients.html', clients=all_clients)
+                        3. Jinja2 template receives 'clients' variable (list of Client objects)
+                        4. Template loops through clients: for client in clients
+                        5. For each client, template displays data: client.name, client.email, etc.
+                        6. Browser receives fully rendered HTML with all client data
+                        
+                        Jinja2 syntax:
+                        - {# #} for comments (this comment block)
+                        - percent signs for logic (loops, conditions)
+                        - double braces for displaying variables
+                        - pipe length filter counts items in list
+                    #}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Vardas / Pavadinimas</th>
+                                    <th>El. paštas</th>
+                                    <th>Telefonas</th>
+                                    <th>Įmonės kodas</th>
+                                    <th>Adresas</th>
+                                    <th>Pridėta</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Loop through each client from the database -->
+                                {% for client in clients %}
+                                <tr>
+                                    <!-- Display client data from database -->
+                                    <td>{{ client.id }}</td>
+                                    <td><strong>{{ client.name }}</strong></td>
+                                    <!-- 
+                                        Use conditional display: show data if exists, otherwise show dash
+                                        This handles None/null values gracefully
+                                    -->
+                                    <td>{{ client.email or '-' }}</td>
+                                    <td>{{ client.phone or '-' }}</td>
+                                    <td>{{ client.company_code or '-' }}</td>
+                                    <td>{{ client.address or '-' }}</td>
+                                    <!-- 
+                                        Format date for display
+                                        strftime formats datetime object as readable string
+                                    -->
+                                    <td>{{ client.created_at.strftime('%Y-%m-%d %H:%M') if client.created_at else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <!-- Show message if no clients exist yet -->
+                    <div class="alert alert-info">
+                        <p class="mb-0">Dar nėra pridėtų klientų. Naudokite formą aukščiau, kad pridėtumėte pirmąjį klientą.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JavaScript for interactive features (like alert dismiss) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

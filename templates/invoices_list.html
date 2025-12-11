@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sąskaitos - Mano Startuolis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Sąskaitų sąrašas</h1>
+            <a href="{{ url_for('create_invoice') }}" class="btn btn-primary">+ Nauja sąskaita</a>
+        </div>
+        
+        <!-- Navigation -->
+        <a href="{{ url_for('list_clients') }}" class="btn btn-link mb-3">← Grįžti į klientus</a>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Invoices Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Visos sąskaitos ({{ invoices|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if invoices %}
+                    <!-- 
+                        RELATIONSHIP DATA FLOW:
+                        ======================
+                        
+                        How invoice.client.name works:
+                        ----------------------------
+                        1. Invoice model has: client_id (foreign key)
+                        2. Invoice model has: backref='client' (creates invoice.client relationship)
+                        3. When we access invoice.client, SQLAlchemy automatically:
+                           - Looks up the Client with id = invoice.client_id
+                           - Returns the Client object
+                        4. Then we access client.name to get the name
+                        
+                        This is called a "relationship" - SQLAlchemy handles the join automatically.
+                        We don't need to write SQL JOIN queries manually!
+                        
+                        Example:
+                        - invoice.client_id = 1 (stored in database)
+                        - invoice.client automatically queries: SELECT * FROM clients WHERE id = 1
+                        - invoice.client.name returns "John Doe"
+                        
+                        Why this is powerful:
+                        - No manual joins needed
+                        - Clean, readable code: invoice.client.name
+                        - SQLAlchemy handles the database query automatically
+                    -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Sąskaitos numeris</th>
+                                    <th>Klientas</th>
+                                    <th>Sąskaitos data</th>
+                                    <th>Mokėjimo terminas</th>
+                                    <th>Būsena</th>
+                                    <th>Suma</th>
+                                    <th>Sukurta</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in invoices %}
+                                <tr>
+                                    <td>{{ invoice.id }}</td>
+                                    <td><strong>{{ invoice.invoice_number }}</strong></td>
+                                    <!-- 
+                                        ACCESSING CLIENT NAME VIA RELATIONSHIP:
+                                        ======================================
+                                        
+                                        invoice.client.name works because:
+                                        1. Invoice model has client_id (foreign key to clients.id)
+                                        2. Invoice model has: backref='client' in Client model
+                                        3. This creates a virtual attribute: invoice.client
+                                        4. When accessed, SQLAlchemy automatically:
+                                           - Queries: SELECT * FROM clients WHERE id = invoice.client_id
+                                           - Returns Client object
+                                        5. Then .name accesses the Client's name field
+                                        
+                                        This is much cleaner than:
+                                        - Manually querying: Client.query.get(invoice.client_id).name
+                                        - Or writing SQL JOIN queries
+                                        
+                                        If client doesn't exist (shouldn't happen), we use 'or' to show '-'
+                                    -->
+                                    <td>
+                                        {% if invoice.client %}
+                                            {{ invoice.client.name }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '-' }}</td>
+                                    <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</td>
+                                    <td>
+                                        <!-- Status badge with color coding -->
+                                        {% if invoice.status == 'paid' %}
+                                            <span class="badge bg-success">{{ invoice.status }}</span>
+                                        {% elif invoice.status == 'overdue' %}
+                                            <span class="badge bg-danger">{{ invoice.status }}</span>
+                                        {% elif invoice.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">{{ invoice.status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ invoice.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <!-- 
+                                        Calculate total from invoice items
+                                        Since we haven't added items yet, this will show 0.00
+                                        Later, when we add InvoiceItems, this will calculate automatically
+                                    -->
+                                    <td><strong>{{ "%.2f"|format(invoice.calculate_total()) }} €</strong></td>
+                                    <td>{{ invoice.created_at.strftime('%Y-%m-%d %H:%M') if invoice.created_at else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <!-- Show message if no invoices exist -->
+                    <div class="alert alert-info">
+                        <p class="mb-2">Dar nėra sukurtų sąskaitų.</p>
+                        <a href="{{ url_for('create_invoice') }}" class="btn btn-primary btn-sm">Sukurti pirmąją sąskaitą</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Information Box -->
+        <div class="alert alert-info mt-3">
+            <strong>Pastaba:</strong> Suma apskaičiuojama iš sąskaitos eilučių (prekių/paslaugų). 
+            Kol eilutės nepridėtos, suma bus 0.00 €.
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
