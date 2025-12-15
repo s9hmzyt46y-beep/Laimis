@@ -7,142 +7,183 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .card { max-width: 400px; width: 100%; }
-        #status { font-size: 12px; padding: 8px; border-radius: 4px; margin-top: 15px; }
+        .card { max-width: 420px; width: 100%; }
+        #status { font-size: 12px; padding: 8px; border-radius: 4px; margin-top: 15px; text-align: center; }
         .status-loading { background: #fff3cd; color: #856404; }
         .status-ok { background: #d4edda; color: #155724; }
         .status-error { background: #f8d7da; color: #721c24; }
+        .toggle-link { cursor: pointer; color: #667eea; text-decoration: underline; }
+        .toggle-link:hover { color: #764ba2; }
     </style>
 </head>
 <body>
     <div class="card shadow p-4">
-        <h3 class="text-center mb-4">🚀 Prisijungimas</h3>
+        <h3 class="text-center mb-4">🚀 Mano Startuolis</h3>
         
-        <div id="step1">
+        <!-- LOGIN FORM -->
+        <div id="loginForm">
+            <h5 class="text-center mb-3">Prisijungimas</h5>
             <div class="mb-3">
                 <label class="form-label">El. paštas</label>
-                <input type="email" id="email" class="form-control" placeholder="jusu@email.com">
+                <input type="email" id="loginEmail" class="form-control" placeholder="jusu@email.com">
             </div>
-            <button id="btnSend" class="btn btn-primary w-100">📧 Gauti kodą</button>
+            <div class="mb-3">
+                <label class="form-label">Slaptažodis</label>
+                <input type="password" id="loginPassword" class="form-control" placeholder="••••••••">
+            </div>
+            <button id="btnLogin" class="btn btn-primary w-100 mb-3">🔐 Prisijungti</button>
+            <p class="text-center mb-0">
+                Neturite paskyros? <span class="toggle-link" id="showRegister">Registruotis</span>
+            </p>
         </div>
         
-        <div id="step2" style="display:none;">
-            <div class="alert alert-info">Kodas išsiųstas! Patikrinkite paštą.</div>
+        <!-- REGISTER FORM -->
+        <div id="registerForm" style="display: none;">
+            <h5 class="text-center mb-3">Registracija</h5>
             <div class="mb-3">
-                <label class="form-label">Kodas (6 skaitmenys)</label>
-                <input type="text" id="code" class="form-control text-center" maxlength="6" style="font-size:20px;letter-spacing:5px;">
+                <label class="form-label">El. paštas</label>
+                <input type="email" id="regEmail" class="form-control" placeholder="jusu@email.com">
             </div>
-            <button id="btnVerify" class="btn btn-success w-100">🔐 Prisijungti</button>
-            <button id="btnBack" class="btn btn-link w-100">← Atgal</button>
+            <div class="mb-3">
+                <label class="form-label">Slaptažodis</label>
+                <input type="password" id="regPassword" class="form-control" placeholder="Min. 6 simboliai">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Pakartokite slaptažodį</label>
+                <input type="password" id="regPassword2" class="form-control" placeholder="••••••••">
+            </div>
+            <button id="btnRegister" class="btn btn-success w-100 mb-3">✅ Registruotis</button>
+            <p class="text-center mb-0">
+                Jau turite paskyrą? <span class="toggle-link" id="showLogin">Prisijungti</span>
+            </p>
         </div>
         
         <div id="status" class="status-loading">⏳ Kraunama...</div>
     </div>
 
 <script type="module">
-// === STATUS HELPER ===
+// Status helper
 function setStatus(msg, type) {
     const el = document.getElementById('status');
     el.textContent = msg;
     el.className = 'status-' + type;
 }
 
-// === MAIN ===
+// Main
 (async function() {
     try {
-        setStatus('📦 Krauname InstantDB...', 'loading');
+        setStatus('📦 Jungiamės...', 'loading');
         
-        // Dynamic import with error catching
         const { init } = await import('https://esm.sh/@instantdb/core');
-        
-        setStatus('🔌 Jungiamės prie DB...', 'loading');
-        
         const db = init({ appId: 'ad4539a9-2114-44bb-a2f4-524d57448deb' });
         
-        setStatus('✅ Paruošta! Įveskite el. paštą.', 'ok');
+        setStatus('✅ Paruošta!', 'ok');
         
         // Check if already logged in
         db.subscribeAuth((auth) => {
             if (auth && auth.user) {
-                setStatus('✅ Jau prisijungęs: ' + auth.user.email, 'ok');
+                setStatus('✅ Prisijungęs: ' + auth.user.email, 'ok');
                 localStorage.setItem('currentUser', auth.user.email);
                 window.location.href = '/dashboard';
             }
         });
         
-        // Elements
-        const email = document.getElementById('email');
-        const code = document.getElementById('code');
-        const btnSend = document.getElementById('btnSend');
-        const btnVerify = document.getElementById('btnVerify');
-        const btnBack = document.getElementById('btnBack');
-        const step1 = document.getElementById('step1');
-        const step2 = document.getElementById('step2');
+        // DOM elements
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const showRegister = document.getElementById('showRegister');
+        const showLogin = document.getElementById('showLogin');
+        const btnLogin = document.getElementById('btnLogin');
+        const btnRegister = document.getElementById('btnRegister');
         
-        let savedEmail = '';
-        
-        // SEND CODE
-        btnSend.onclick = async function() {
-            const emailVal = email.value.trim();
-            if (!emailVal) return alert('Įveskite el. paštą!');
-            
-            savedEmail = emailVal;
-            btnSend.disabled = true;
-            btnSend.textContent = '⏳ Siunčiama...';
-            setStatus('📤 Siunčiame kodą...', 'loading');
-            
-            try {
-                await db.auth.sendMagicCode({ email: emailVal });
-                setStatus('✅ Kodas išsiųstas į: ' + emailVal, 'ok');
-                step1.style.display = 'none';
-                step2.style.display = 'block';
-                code.focus();
-            } catch (e) {
-                setStatus('❌ Klaida: ' + (e.body?.message || e.message), 'error');
-                alert('Klaida: ' + (e.body?.message || e.message));
-            }
-            
-            btnSend.disabled = false;
-            btnSend.textContent = '📧 Gauti kodą';
+        // Toggle forms
+        showRegister.onclick = () => {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+            setStatus('✅ Užpildykite registracijos formą', 'ok');
         };
         
-        // VERIFY CODE
-        btnVerify.onclick = async function() {
-            const codeVal = code.value.trim();
-            if (!codeVal || codeVal.length !== 6) return alert('Įveskite 6 skaitmenų kodą!');
+        showLogin.onclick = () => {
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'block';
+            setStatus('✅ Paruošta!', 'ok');
+        };
+        
+        // LOGIN
+        btnLogin.onclick = async () => {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
             
-            btnVerify.disabled = true;
-            btnVerify.textContent = '⏳ Tikrinama...';
-            setStatus('🔍 Tikriname kodą...', 'loading');
+            if (!email || !password) {
+                return alert('Įveskite el. paštą ir slaptažodį!');
+            }
+            
+            btnLogin.disabled = true;
+            btnLogin.textContent = '⏳ Jungiamasi...';
+            setStatus('🔄 Tikrinama...', 'loading');
             
             try {
-                await db.auth.signInWithMagicCode({ email: savedEmail, code: codeVal });
+                await db.auth.signInWithCredential({ email, password });
                 setStatus('✅ Prisijungta!', 'ok');
-                localStorage.setItem('currentUser', savedEmail);
+                localStorage.setItem('currentUser', email);
                 window.location.href = '/dashboard';
             } catch (e) {
-                setStatus('❌ Blogas kodas', 'error');
-                alert('Blogas kodas! Bandykite dar kartą.');
-                btnVerify.disabled = false;
-                btnVerify.textContent = '🔐 Prisijungti';
+                console.error('Login error:', e);
+                const msg = e.body?.message || e.message || 'Neteisingi prisijungimo duomenys';
+                setStatus('❌ ' + msg, 'error');
+                alert('Klaida: ' + msg);
+                btnLogin.disabled = false;
+                btnLogin.textContent = '🔐 Prisijungti';
             }
         };
         
-        // BACK
-        btnBack.onclick = function() {
-            step1.style.display = 'block';
-            step2.style.display = 'none';
-            code.value = '';
-            setStatus('✅ Paruošta! Įveskite el. paštą.', 'ok');
+        // REGISTER
+        btnRegister.onclick = async () => {
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const password2 = document.getElementById('regPassword2').value;
+            
+            if (!email || !password) {
+                return alert('Įveskite el. paštą ir slaptažodį!');
+            }
+            
+            if (password.length < 6) {
+                return alert('Slaptažodis turi būti bent 6 simbolių!');
+            }
+            
+            if (password !== password2) {
+                return alert('Slaptažodžiai nesutampa!');
+            }
+            
+            btnRegister.disabled = true;
+            btnRegister.textContent = '⏳ Registruojama...';
+            setStatus('🔄 Kuriama paskyra...', 'loading');
+            
+            try {
+                await db.auth.signUp({ email, password });
+                setStatus('✅ Paskyra sukurta! Prisijungiama...', 'ok');
+                localStorage.setItem('currentUser', email);
+                window.location.href = '/dashboard';
+            } catch (e) {
+                console.error('Register error:', e);
+                const msg = e.body?.message || e.message || 'Registracijos klaida';
+                setStatus('❌ ' + msg, 'error');
+                alert('Klaida: ' + msg);
+                btnRegister.disabled = false;
+                btnRegister.textContent = '✅ Registruotis';
+            }
         };
         
-        // Enter keys
-        email.onkeypress = (e) => { if (e.key === 'Enter') btnSend.click(); };
-        code.onkeypress = (e) => { if (e.key === 'Enter') btnVerify.click(); };
-        code.oninput = () => { code.value = code.value.replace(/\D/g, '').slice(0, 6); };
+        // Enter key handlers
+        document.getElementById('loginPassword').onkeypress = (e) => {
+            if (e.key === 'Enter') btnLogin.click();
+        };
+        document.getElementById('regPassword2').onkeypress = (e) => {
+            if (e.key === 'Enter') btnRegister.click();
+        };
         
     } catch (err) {
-        setStatus('❌ KRITINĖ KLAIDA: ' + err.message, 'error');
+        setStatus('❌ KLAIDA: ' + err.message, 'error');
         console.error('FATAL:', err);
     }
 })();
