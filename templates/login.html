@@ -12,6 +12,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 0;
         }
         .login-card {
             background: white;
@@ -22,7 +23,7 @@
             max-width: 400px;
         }
         .brand { font-size: 48px; text-align: center; margin-bottom: 20px; }
-        h2 { text-align: center; margin-bottom: 30px; }
+        h2 { text-align: center; margin-bottom: 30px; color: #333; }
         .debug-box {
             background: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -31,9 +32,12 @@
             margin-top: 20px;
             font-size: 12px;
             font-family: monospace;
+            text-align: center;
         }
-        .debug-box.success { background: #d4edda; border-color: #c3e6cb; }
-        .debug-box.error { background: #f8d7da; border-color: #f5c6cb; }
+        .debug-box.success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .debug-box.error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; }
+        .btn-primary:hover { background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%); }
     </style>
 </head>
 <body>
@@ -70,150 +74,153 @@
     </div>
     
     <!-- Debug info -->
-    <div id="debug-box" class="debug-box">Kraunama...</div>
+    <div id="debug-box" class="debug-box">⏳ Kraunama...</div>
 </div>
 
-<!-- Load InstantDB from CDN -->
-<script src="https://js.instantdb.com/v0.14.3/index.global.js"></script>
-
-<script>
-    // Debug helper
+<script type="module">
+    // Import InstantDB
+    import { init } from 'https://www.unpkg.com/@instantdb/core@0.14.3/dist/module/index.js';
+    
+    // Debug helper - shows status on page
     function debug(msg, isError) {
-        var box = document.getElementById('debug-box');
-        box.textContent = msg;
-        box.className = 'debug-box ' + (isError ? 'error' : 'success');
-        console.log(msg);
+        const box = document.getElementById('debug-box');
+        if (box) {
+            box.textContent = msg;
+            box.className = 'debug-box ' + (isError ? 'error' : 'success');
+        }
+        console.log('[LOGIN]', msg);
     }
     
-    // Global variables
-    var db = null;
-    var userEmail = '';
+    // Variables
+    let db = null;
+    let userEmail = '';
     
-    // Initialize when page loads
-    window.onload = function() {
-        debug('Puslapis užkrautas, jungiamės prie DB...');
+    // DOM Elements
+    const emailInput = document.getElementById('email-input');
+    const codeInput = document.getElementById('code-input');
+    const sendBtn = document.getElementById('send-btn');
+    const verifyBtn = document.getElementById('verify-btn');
+    const backBtn = document.getElementById('back-btn');
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    
+    // Initialize InstantDB
+    try {
+        debug('Jungiamės prie duomenų bazės...');
         
-        try {
-            // Check if InstantDB loaded
-            if (typeof instantdb === 'undefined') {
-                debug('KLAIDA: InstantDB biblioteka neužsikrovė!', true);
-                return;
-            }
-            
-            // Initialize InstantDB
-            db = instantdb.init({ 
-                appId: 'ad4539a9-2114-44bb-a2f4-524d57448deb' 
-            });
-            
-            debug('✅ DB prisijungta! Galite įvesti el. paštą.');
-            
-            // Check if already logged in
-            db.subscribeAuth(function(auth) {
-                if (auth.user) {
-                    debug('Jau prisijungęs: ' + auth.user.email);
-                    localStorage.setItem('currentUser', auth.user.email);
+        db = init({ 
+            appId: 'ad4539a9-2114-44bb-a2f4-524d57448deb' 
+        });
+        
+        debug('✅ DB prisijungta! Įveskite el. paštą.');
+        
+        // Check if already logged in
+        db.subscribeAuth((auth) => {
+            if (auth.user) {
+                debug('✅ Jau prisijungęs: ' + auth.user.email);
+                localStorage.setItem('currentUser', auth.user.email);
+                setTimeout(() => {
                     window.location.href = '/dashboard';
-                }
-            });
-            
-        } catch (e) {
-            debug('KLAIDA inicijuojant: ' + e.message, true);
-            console.error(e);
+                }, 500);
+            }
+        });
+        
+    } catch (e) {
+        debug('❌ KLAIDA: ' + e.message, true);
+        console.error('InstantDB init error:', e);
+    }
+    
+    // Button 1: Send Magic Code
+    sendBtn.addEventListener('click', async () => {
+        const email = emailInput.value.trim();
+        
+        if (!email) {
+            alert('Įveskite el. pašto adresą!');
+            return;
         }
         
-        // Button 1: Send Code
-        document.getElementById('send-btn').onclick = function() {
-            debug('Mygtukas paspaustas!');
-            
-            var email = document.getElementById('email-input').value.trim();
-            
-            if (!email) {
-                alert('Įveskite el. pašto adresą!');
-                return;
-            }
-            
-            if (!db) {
-                alert('Duomenų bazė nepasiekiama. Atnaujinkite puslapį.');
-                return;
-            }
-            
-            userEmail = email;
-            var btn = document.getElementById('send-btn');
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Siunčiama...';
-            
-            debug('Siunčiame kodą į: ' + email);
-            
-            db.auth.sendMagicCode({ email: email })
-                .then(function() {
-                    debug('✅ Kodas išsiųstas į ' + email);
-                    document.getElementById('step-1').style.display = 'none';
-                    document.getElementById('step-2').style.display = 'block';
-                    document.getElementById('code-input').focus();
-                })
-                .catch(function(err) {
-                    debug('KLAIDA: ' + (err.body ? err.body.message : err.message), true);
-                    alert('Nepavyko išsiųsti kodo: ' + (err.body ? err.body.message : err.message));
-                    btn.disabled = false;
-                    btn.innerHTML = '📧 Gauti kodą';
-                });
-        };
+        if (!db) {
+            alert('Duomenų bazė nepasiekiama. Atnaujinkite puslapį.');
+            return;
+        }
         
-        // Button 2: Verify Code
-        document.getElementById('verify-btn').onclick = function() {
-            var code = document.getElementById('code-input').value.trim();
-            
-            if (!code || code.length !== 6) {
-                alert('Įveskite 6 skaitmenų kodą!');
-                return;
-            }
-            
-            var btn = document.getElementById('verify-btn');
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Tikrinama...';
-            
-            debug('Tikriname kodą...');
-            
-            db.auth.signInWithMagicCode({ email: userEmail, code: code })
-                .then(function() {
-                    debug('✅ Prisijungta sėkmingai!');
-                    localStorage.setItem('currentUser', userEmail);
-                    window.location.href = '/dashboard';
-                })
-                .catch(function(err) {
-                    debug('KLAIDA: Blogas kodas', true);
-                    alert('Blogas kodas! Bandykite dar kartą.');
-                    btn.disabled = false;
-                    btn.innerHTML = '🔐 Prisijungti';
-                });
-        };
+        userEmail = email;
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '⏳ Siunčiama...';
+        debug('Siunčiame kodą į: ' + email);
         
-        // Button 3: Back
-        document.getElementById('back-btn').onclick = function() {
-            document.getElementById('step-1').style.display = 'block';
-            document.getElementById('step-2').style.display = 'none';
-            document.getElementById('code-input').value = '';
-            debug('✅ DB prisijungta! Galite įvesti el. paštą.');
-        };
+        try {
+            await db.auth.sendMagicCode({ email: email });
+            
+            debug('✅ Kodas išsiųstas į ' + email);
+            step1.style.display = 'none';
+            step2.style.display = 'block';
+            codeInput.focus();
+            
+        } catch (err) {
+            console.error('Send code error:', err);
+            const errorMsg = err.body?.message || err.message || 'Nežinoma klaida';
+            debug('❌ Klaida: ' + errorMsg, true);
+            alert('Nepavyko išsiųsti kodo: ' + errorMsg);
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '📧 Gauti kodą';
+        }
+    });
+    
+    // Button 2: Verify Code
+    verifyBtn.addEventListener('click', async () => {
+        const code = codeInput.value.trim();
         
-        // Enter key handlers
-        document.getElementById('email-input').onkeypress = function(e) {
-            if (e.key === 'Enter') {
-                document.getElementById('send-btn').click();
-            }
-        };
+        if (!code || code.length !== 6) {
+            alert('Įveskite 6 skaitmenų kodą!');
+            return;
+        }
         
-        document.getElementById('code-input').onkeypress = function(e) {
-            if (e.key === 'Enter') {
-                document.getElementById('verify-btn').click();
-            }
-        };
+        verifyBtn.disabled = true;
+        verifyBtn.innerHTML = '⏳ Tikrinama...';
+        debug('Tikriname kodą...');
         
-        // Format code input (numbers only)
-        document.getElementById('code-input').oninput = function() {
-            this.value = this.value.replace(/[^0-9]/g, '').substring(0, 6);
-        };
-    };
+        try {
+            await db.auth.signInWithMagicCode({ email: userEmail, code: code });
+            
+            debug('✅ Prisijungta sėkmingai!');
+            localStorage.setItem('currentUser', userEmail);
+            
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 500);
+            
+        } catch (err) {
+            console.error('Verify code error:', err);
+            debug('❌ Blogas kodas', true);
+            alert('Blogas kodas! Bandykite dar kartą.');
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = '🔐 Prisijungti';
+        }
+    });
+    
+    // Button 3: Back
+    backBtn.addEventListener('click', () => {
+        step1.style.display = 'block';
+        step2.style.display = 'none';
+        codeInput.value = '';
+        debug('✅ DB prisijungta! Įveskite el. paštą.');
+    });
+    
+    // Enter key handlers
+    emailInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendBtn.click();
+    });
+    
+    codeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') verifyBtn.click();
+    });
+    
+    // Format code input (numbers only)
+    codeInput.addEventListener('input', () => {
+        codeInput.value = codeInput.value.replace(/[^0-9]/g, '').substring(0, 6);
+    });
 </script>
 
 </body>
