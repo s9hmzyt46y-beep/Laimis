@@ -53,7 +53,7 @@ function setStatus(msg, type) {
         setStatus('📦 Krauname InstantDB...', 'loading');
         
         // Dynamic import with error catching
-        const { init } = await import('https://esm.sh/@instantdb/core@0.14.31');
+        const { init } = await import('https://esm.sh/@instantdb/core');
         
         setStatus('🔌 Jungiamės prie DB...', 'loading');
         
