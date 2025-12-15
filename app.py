@@ -8,7 +8,7 @@ This is a serverless function optimized for Vercel deployment.
 """
 
 import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
 import base64
 import traceback
@@ -66,6 +66,15 @@ def index():
     Frontend uses InstantDB; no server-side expense queries needed.
     """
     return render_template('expenses.html')
+
+
+@app.route('/invoices', methods=['GET'])
+def invoices():
+    """
+    Invoices page - rendered as a standalone frontend view.
+    Data is managed client-side (e.g., via InstantDB or other JS logic).
+    """
+    return render_template('invoices.html')
 
 @app.route('/scan-receipt', methods=['POST'])
 def scan_receipt():
@@ -443,6 +452,113 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
         
     except Exception as e:
         print("CRITICAL SERVER ERROR:")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/generate-pdf', methods=['POST'])
+def generate_pdf():
+    """
+    Serverless PDF generation endpoint using FPDF.
+
+    Expects JSON payload:
+      {
+        "client_name": "...",
+        "invoice_number": "...",
+        "date": "YYYY-MM-DD",
+        "items": [{ "description": "...", "qty": 1, "price": 10.0, "total": 10.0 }, ...]
+      }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON body provided"}), 400
+
+        client_name = (data.get("client_name") or "").strip()
+        invoice_number = (data.get("invoice_number") or "").strip()
+        date_str = (data.get("date") or "").strip()
+        items = data.get("items") or []
+
+        if not client_name or not invoice_number or not date_str:
+            return jsonify({"error": "Missing required fields: client_name, invoice_number, date"}), 400
+
+        if not isinstance(items, list) or len(items) == 0:
+            return jsonify({"error": "Items array is required and must contain at least one item"}), 400
+
+        # Lazy import FPDF to avoid startup issues if not installed
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            return jsonify({"error": "PDF generator not available (missing fpdf). Please install fpdf."}), 500
+
+        pdf = FPDF()
+        pdf.add_page()
+
+        # NOTE: Default core fonts in FPDF are Latin-1; Lithuanian characters may need UTF-8/TTF setup.
+        pdf.set_auto_page_break(auto=True, margin=15)
+
+        # Header
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, "SASKAITA FAKTURA", ln=True)
+
+        pdf.set_font("Helvetica", "", 12)
+        pdf.cell(0, 8, f"Saskaitos numeris: {invoice_number}", ln=True)
+        pdf.cell(0, 8, f"Data: {date_str}", ln=True)
+        pdf.cell(0, 8, f"Klientas: {client_name}", ln=True)
+        pdf.ln(5)
+
+        # Table header
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(90, 8, "Aprasymas", border=1)
+        pdf.cell(20, 8, "Kiekis", border=1, align="R")
+        pdf.cell(30, 8, "Kaina", border=1, align="R")
+        pdf.cell(30, 8, "Suma", border=1, align="R")
+        pdf.ln()
+
+        # Table rows
+        pdf.set_font("Helvetica", "", 11)
+        total_sum = 0.0
+
+        for item in items:
+            desc = str(item.get("description", ""))[:60]
+            qty = float(item.get("qty") or 0)
+            price = float(item.get("price") or 0)
+            total = float(item.get("total") or (qty * price))
+            total_sum += total
+
+            pdf.cell(90, 8, desc, border=1)
+            pdf.cell(20, 8, f"{qty:.2f}", border=1, align="R")
+            pdf.cell(30, 8, f"{price:.2f} €", border=1, align="R")
+            pdf.cell(30, 8, f"{total:.2f} €", border=1, align="R")
+            pdf.ln()
+
+        # Totals
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(140, 8, "Bendra suma:", align="R")
+        pdf.cell(30, 8, f"{total_sum:.2f} €", border=0, align="R")
+        pdf.ln(10)
+
+        # Output to bytes (serverless friendly)
+        pdf_str = pdf.output(dest="S")
+        if isinstance(pdf_str, str):
+            pdf_bytes = pdf_str.encode("latin-1")
+        else:
+            pdf_bytes = pdf_str  # already bytes in some FPDF versions
+
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+
+        filename = f"invoice_{invoice_number}.pdf"
+        return send_file(
+            buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    except Exception as e:
+        print("PDF GENERATION ERROR:")
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 

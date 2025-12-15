@@ -7,226 +7,262 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container mt-4">
-        <h1 class="mb-4">Sąskaitų valdymas</h1>
-        
-        <!-- Navigation -->
-        <div class="mb-3">
-            <a href="{{ url_for('index') }}" class="btn btn-link">← Pagrindinis</a>
-            <a href="{{ url_for('list_clients') }}" class="btn btn-link">Klientai →</a>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Mano Startuolis</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Išlaidos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/invoices">Sąskaitos</a>
+                    </li>
+                </ul>
+            </div>
         </div>
-        
-        <!-- Flash Messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        
-        <!-- Add New Invoice Form -->
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Sąskaitos</h1>
+        </div>
+
+        <!-- New Invoice Form -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Pridėti naują sąskaitą</h5>
+                <h5 class="mb-0">Nauja sąskaita</h5>
             </div>
             <div class="card-body">
-                {# 
-                    HTML FORM EXPLANATION:
-                    =====================
-                    
-                    This form allows users to create a new invoice.
-                    The form uses POST method to send data to the server.
-                    
-                    CRITICAL: Client Dropdown
-                    -------------------------
-                    The <select> tag creates a dropdown menu.
-                    - Each <option> has value="client.id" (the ID number)
-                    - The displayed text is client.name (readable name)
-                    - When form is submitted, browser sends client_id="1" (or whatever ID was selected)
-                    - Flask receives this as request.form.get('client_id')
-                    - This ID becomes the foreign key in the database
-                #}
-                <form method="POST" action="{{ url_for('saskaitos') }}">
-                    <div class="row">
-                        <!-- Invoice Number Field -->
-                        <div class="col-md-4 mb-3">
-                            <label for="invoice_number" class="form-label">Sąskaitos numeris <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="invoice_number" name="invoice_number" 
-                                   required placeholder="PVZ: INV-2024-001">
+                <form id="invoice-form">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Kliento vardas</label>
+                            <input type="text" class="form-control" name="client_name" required>
                         </div>
-                        
-                        <!-- Client Dropdown - CRITICAL -->
-                        <div class="col-md-4 mb-3">
-                            <label for="client_id" class="form-label">Klientas <span class="text-danger">*</span></label>
-                            {# 
-                                CLIENT DROPDOWN EXPLANATION:
-                                ===========================
-                                
-                                This <select> dropdown is CRITICAL for the foreign key relationship.
-                                
-                                HOW IT WORKS:
-                                ------------
-                                1. We loop through all clients: {% for client in clients %}
-                                2. For each client, we create an <option> tag
-                                3. value="{{ client.id }}" - This is what gets sent to Flask
-                                   - client.id is the primary key (e.g., 1, 2, 3)
-                                   - This becomes the foreign key in the invoice table
-                                4. {{ client.name }} - This is what the user sees
-                                   - Display text (readable name like "John Doe")
-                                   - User sees the name, but browser sends the ID
-                                
-                                EXAMPLE:
-                                - User sees dropdown with: "John Doe", "Jane Smith"
-                                - User selects "John Doe" (which has id=1)
-                                - Browser sends: client_id=1
-                                - Flask receives: request.form.get('client_id') = "1"
-                                - We convert to int: client_id = 1
-                                - Invoice is created with: invoice.client_id = 1
-                                - Database links invoice to client with id=1
-                                
-                                WHY value="client.id" NOT value="client.name":
-                                ---------------------------------------------
-                                - IDs are unique and never change
-                                - Names can change (would break relationships)
-                                - IDs are efficient (integers vs strings)
-                                - Database uses IDs for fast lookups
-                            #}
-                            <select class="form-select" id="client_id" name="client_id" required>
-                                <option value="">-- Pasirinkite klientą --</option>
-                                {% for client in clients %}
-                                <option value="{{ client.id }}">{{ client.name }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="col-md-4">
+                            <label class="form-label">Sąskaitos numeris</label>
+                            <input type="text" class="form-control" name="invoice_number" required>
                         </div>
-                        
-                        <!-- Amount Field -->
-                        <div class="col-md-4 mb-3">
-                            <label for="amount" class="form-label">Suma (€)</label>
-                            <input type="number" class="form-control" id="amount" name="amount" 
-                                   step="0.01" min="0" placeholder="0.00">
-                            <small class="form-text text-muted">
-                                Pastaba: Suma bus apskaičiuojama iš sąskaitos eilučių
-                            </small>
+                        <div class="col-md-4">
+                            <label class="form-label">Data</label>
+                            <input type="date" class="form-control" name="date" required>
                         </div>
                     </div>
-                    
-                    <div class="row">
-                        <!-- Invoice Date Field -->
-                        <div class="col-md-4 mb-3">
-                            <label for="invoice_date" class="form-label">Sąskaitos data</label>
-                            <input type="date" class="form-control" id="invoice_date" name="invoice_date" 
-                                   value="{{ today.strftime('%Y-%m-%d') if today else '' }}">
-                        </div>
-                    </div>
-                    
-                    <!-- Submit Button -->
-                    <button type="submit" class="btn btn-primary">Pridėti sąskaitą</button>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Invoices List Table -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Esamos sąskaitos ({{ invoices|length }})</h5>
-            </div>
-            <div class="card-body">
-                {% if invoices %}
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead>
+
+                    <!-- Items Table -->
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered align-middle" id="items-table">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Numeris</th>
-                                    <th>Klientas</th>
-                                    <th>Suma (€)</th>
-                                    <th>Data</th>
-                                    <th>Būsena</th>
-                                    <th>Veiksmai</th>
+                                    <th>Aprašymas</th>
+                                    <th style="width: 100px;">Kiekis</th>
+                                    <th style="width: 140px;">Kaina (€)</th>
+                                    <th style="width: 140px;">Suma (€)</th>
+                                    <th style="width: 80px;">Veiksmai</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {% for invoice in invoices %}
-                                <tr>
-                                    <td>
-                                        <strong>
-                                            <a href="{{ url_for('view_invoice', id=invoice.id) }}">
-                                                {{ invoice.invoice_number }}
-                                            </a>
-                                        </strong>
-                                    </td>
-                                    {# 
-                                        ACCESSING CLIENT NAME VIA FOREIGN KEY RELATIONSHIP:
-                                        ==================================================
-                                        
-                                        invoice.client.name works because:
-                                        1. Invoice model has client_id (foreign key)
-                                        2. Invoice model has relationship: backref='client'
-                                        3. SQLAlchemy automatically creates invoice.client
-                                        4. This accesses the Client object linked by client_id
-                                        5. Then we get the name: invoice.client.name
-                                        
-                                        This is the power of foreign keys - we can access
-                                        related data without writing SQL JOIN queries!
-                                    #}
-                                    <td>
-                                        {% if invoice.client %}
-                                            {{ invoice.client.name }}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    {# 
-                                        Calculate total from invoice items
-                                        If no items exist, total will be 0.00
-                                    #}
-                                    <td><strong>{{ "%.2f"|format(invoice.calculate_total()) }} €</strong></td>
-                                    <td>{{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '-' }}</td>
-                                    <td>
-                                        {% if invoice.status == 'paid' %}
-                                            <span class="badge bg-success">{{ invoice.status }}</span>
-                                        {% elif invoice.status == 'overdue' %}
-                                            <span class="badge bg-danger">{{ invoice.status }}</span>
-                                        {% else %}
-                                            <span class="badge bg-warning">{{ invoice.status }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {# 
-                                            Action links for invoice operations
-                                            Uses url_for() to generate the correct URLs with invoice ID
-                                            Styled as small Bootstrap buttons for better UX
-                                        #}
-                                        <a href="{{ url_for('view_invoice', id=invoice.id) }}" 
-                                           class="btn btn-sm btn-outline-primary"
-                                           title="Peržiūrėti sąskaitos detalės">
-                                            Peržiūrėti
-                                        </a>
-                                        <a href="{{ url_for('print_invoice', id=invoice.id) }}" 
-                                           class="btn btn-sm btn-secondary"
-                                           target="_blank"
-                                           title="Spausdinti sąskaitą arba išsaugoti kaip PDF">
-                                            🖨️ Spausdinti / PDF
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
+                            <tbody id="items-body">
+                                <!-- Rows added via JS -->
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="alert alert-info">
-                        <p class="mb-0">Dar nėra sukurtų sąskaitų. Naudokite formą aukščiau, kad pridėtumėte pirmąją sąskaitą.</p>
+
+                    <button type="button" class="btn btn-outline-primary mb-3" id="add-item-btn">+ Pridėti eilutę</button>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Bendra suma:</strong>
+                            <span id="invoice-total">0.00</span> €
+                        </div>
+                        <button type="button" class="btn btn-success" id="generate-pdf-btn">
+                            📄 Generuoti PDF
+                        </button>
                     </div>
-                {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <!-- Placeholder for future invoices list (could be powered by InstantDB) -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Sąskaitų sąrašas</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-0">Čia ateityje galėsime rodyti sąskaitų sąrašą iš InstantDB.</p>
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Dynamic items table logic
+        const itemsBody = document.getElementById('items-body');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const invoiceTotalEl = document.getElementById('invoice-total');
+
+        function recalcTotal() {
+            let total = 0;
+            itemsBody.querySelectorAll('tr').forEach(row => {
+                const totalInput = row.querySelector('[name="item_total"]');
+                const val = parseFloat(totalInput.value) || 0;
+                total += val;
+            });
+            invoiceTotalEl.textContent = total.toFixed(2);
+        }
+
+        function attachRowEvents(row) {
+            const qtyInput = row.querySelector('[name="item_qty"]');
+            const priceInput = row.querySelector('[name="item_price"]');
+            const totalInput = row.querySelector('[name="item_total"]');
+
+            function updateRowTotal() {
+                const qty = parseFloat(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const rowTotal = qty * price;
+                totalInput.value = rowTotal.toFixed(2);
+                recalcTotal();
+            }
+
+            qtyInput.addEventListener('input', updateRowTotal);
+            priceInput.addEventListener('input', updateRowTotal);
+        }
+
+        // Public function to add a new item row
+        function addItem() {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="item_description" placeholder="Prekė / paslauga" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="item_qty" min="1" step="1" value="1" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="item_price" min="0" step="0.01" value="0.00" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="item_total" min="0" step="0.01" value="0.00" readonly>
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-danger remove-item-btn">🗑️</button>
+                </td>
+            `;
+            itemsBody.appendChild(row);
+
+            // Attach behaviour
+            attachRowEvents(row);
+
+            // Remove button
+            row.querySelector('.remove-item-btn').addEventListener('click', () => {
+                row.remove();
+                recalcTotal();
+            });
+        }
+
+        // Wire button to addItem()
+        addItemBtn.addEventListener('click', addItem);
+
+        // Add initial empty row
+        addItem();
+
+        async function generatePDF() {
+            const form = document.getElementById('invoice-form');
+            const clientName = form.querySelector('[name="client_name"]').value.trim();
+            const invoiceNumber = form.querySelector('[name="invoice_number"]').value.trim();
+            const date = form.querySelector('[name="date"]').value;
+
+            if (!clientName || !invoiceNumber || !date) {
+                alert('Prašome užpildyti Kliento vardą, Sąskaitos numerį ir Datą.');
+                return;
+            }
+
+            const items = [];
+            itemsBody.querySelectorAll('tr').forEach(row => {
+                const description = row.querySelector('[name="item_description"]').value.trim();
+                const qty = parseFloat(row.querySelector('[name="item_qty"]').value) || 0;
+                const price = parseFloat(row.querySelector('[name="item_price"]').value) || 0;
+                const total = parseFloat(row.querySelector('[name="item_total"]').value) || 0;
+
+                if (description && qty > 0 && price >= 0) {
+                    items.push({ description, qty, price, total });
+                }
+            });
+
+            if (items.length === 0) {
+                alert('Prašome pridėti bent vieną eilutę sąskaitoje.');
+                return;
+            }
+
+            const payload = {
+                client_name: clientName,
+                invoice_number: invoiceNumber,
+                date: date,
+                items: items
+            };
+
+            try {
+                const response = await fetch('/api/generate-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    let errText = 'Nežinoma klaida';
+                    try {
+                        const errData = await response.json();
+                        errText = errData.error || errText;
+                    } catch (_) {}
+                    alert('Klaida generuojant PDF: ' + errText);
+                    return;
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = (invoiceNumber || 'invoice') + '.pdf';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                alert('Nepavyko sugeneruoti PDF: ' + (error.message || 'nežinoma klaida'));
+            }
+        }
+
+        document.getElementById('generate-pdf-btn').addEventListener('click', generatePDF);
+    </script>
+
+    <!-- InstantDB integration (same as expenses, placeholder for future invoice storage) -->
+    <script type="module">
+      import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
+
+      const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
+
+      let db;
+      try {
+          db = init({ appId: APP_ID });
+          window.db = db;
+          window.tx = tx;
+          window.id = id;
+          console.log("✅ InstantDB (invoices) prisijungė");
+      } catch (e) {
+          console.error("Klaida jungiantis prie InstantDB (invoices):", e);
+      }
+
+      // Ateityje čia galėsime saugoti sąskaitas į InstantDB,
+      // pvz. tx.invoices[id()].update({...})
+    </script>
 </body>
 </html>
 
