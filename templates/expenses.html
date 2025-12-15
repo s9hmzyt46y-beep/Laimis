@@ -359,9 +359,8 @@
                     </div>
                     <div id="view-file-container" style="display: none;">
                         <hr>
-                        <h6>📎 Prisegtas failas:</h6>
-                        <div id="view-file-preview" class="text-center p-3 bg-light border rounded">
-                            <!-- File preview will be inserted here -->
+                        <div class="alert alert-info mb-0">
+                            <small>💡 Serverless aplinkoje originalūs failai neišsaugomi. Duomenys išgauti AI nuskaitymo metu.</small>
                         </div>
                     </div>
                 </div>
@@ -891,9 +890,9 @@
             vatAmountInput.addEventListener('input', updateTotal);
             amountInput.addEventListener('input', updateFromTotal);
             
-            // File link
+            // File indicator (no actual file storage in serverless)
             const fileCell = document.createElement('td');
-            fileCell.innerHTML = `<a href="/uploads/${filename}" target="_blank" class="btn btn-sm btn-outline-primary">📄 Peržiūrėti</a>`;
+            fileCell.innerHTML = `<span class="badge bg-secondary" title="Failas apdorotas atmintyje">📄 Nuskaitytas</span>`;
             
             // Actions (Remove button)
             const actionsCell = document.createElement('td');
@@ -1382,8 +1381,6 @@
                   }
 
                   const newId = window.id();
-                  const fileLink = row.querySelector('a'); 
-                  const fileUrl = fileLink ? fileLink.href : null;
 
                   txs.push(window.tx.expenses[newId].update({
                       userId: userId,  // USER DATA ISOLATION
@@ -1394,7 +1391,6 @@
                       amount: parseFloat(amountEl.value) || 0,
                       net: parseFloat(netEl ? netEl.value : 0) || 0,
                       vat: parseFloat(vatEl ? vatEl.value : 0) || 0,
-                      fileUrl: fileUrl,
                       createdAt: new Date().toISOString()
                   }));
 
@@ -1503,24 +1499,10 @@
           document.getElementById('view-vat').textContent = (parseFloat(expense.vat) || 0).toFixed(2);
           document.getElementById('view-amount').textContent = (parseFloat(expense.amount) || 0).toFixed(2);
           
-          // Handle file preview if available
+          // File info section (serverless - no actual files stored)
           const fileContainer = document.getElementById('view-file-container');
-          const filePreview = document.getElementById('view-file-preview');
-          
-          if (expense.fileUrl) {
-              fileContainer.style.display = 'block';
-              // Check if it's an image URL
-              if (expense.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                  filePreview.innerHTML = `<img src="${expense.fileUrl}" class="img-fluid" style="max-height: 400px;" alt="Čekio nuotrauka">`;
-              } else if (expense.fileUrl.match(/\.pdf$/i)) {
-                  filePreview.innerHTML = `<a href="${expense.fileUrl}" target="_blank" class="btn btn-outline-primary"><i class="bi bi-file-pdf"></i> Atidaryti PDF</a>`;
-              } else {
-                  filePreview.innerHTML = `<a href="${expense.fileUrl}" target="_blank" class="btn btn-outline-secondary">📄 Atidaryti failą</a>`;
-              }
-          } else {
-              fileContainer.style.display = 'none';
-              filePreview.innerHTML = '';
-          }
+          // Always show info that files aren't stored in serverless
+          fileContainer.style.display = 'block';
           
           // Setup delete button in modal
           document.getElementById('modal-delete-btn').onclick = function() {
