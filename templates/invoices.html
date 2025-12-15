@@ -22,6 +22,9 @@
                     <li class="nav-item">
                         <a class="nav-link active" aria-current="page" href="/invoices">Sąskaitos</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/clients">Klientai</a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -41,8 +44,11 @@
                 <form id="invoice-form">
                     <div class="row mb-3">
                         <div class="col-md-4">
-                            <label class="form-label">Kliento vardas</label>
-                            <input type="text" class="form-control" name="client_name" required>
+                            <label class="form-label">Klientas</label>
+                            <select id="clientSelect" class="form-select mb-2">
+                                <option value="">--- Pasirinkti klientą ---</option>
+                            </select>
+                            <input type="text" class="form-control" name="client_name" placeholder="Kliento vardas" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Sąskaitos numeris</label>
@@ -105,6 +111,10 @@
         const itemsBody = document.getElementById('items-body');
         const addItemBtn = document.getElementById('add-item-btn');
         const invoiceTotalEl = document.getElementById('invoice-total');
+        const clientSelectEl = document.getElementById('clientSelect');
+
+        // Will be filled from InstantDB (clients)
+        window.invoiceClients = [];
 
         function recalcTotal() {
             let total = 0;
@@ -243,7 +253,7 @@
         document.getElementById('generate-pdf-btn').addEventListener('click', generatePDF);
     </script>
 
-    <!-- InstantDB integration (same as expenses, placeholder for future invoice storage) -->
+    <!-- InstantDB integration (invoices + clients for dropdown) -->
     <script type="module">
       import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
 
@@ -260,8 +270,50 @@
           console.error("Klaida jungiantis prie InstantDB (invoices):", e);
       }
 
-      // Ateityje čia galėsime saugoti sąskaitas į InstantDB,
-      // pvz. tx.invoices[id()].update({...})
+      // Subscribe to clients to populate dropdown
+      if (db) {
+          db.subscribeQuery({ clients: {} }, (resp) => {
+              if (resp.error) {
+                  console.error("Klaida gaunant klientus sąskaitoms:", resp.error);
+                  return;
+              }
+              const clients = resp.data.clients || [];
+              window.invoiceClients = clients;
+
+              const select = document.getElementById('clientSelect');
+              if (!select) return;
+
+              // Reset options
+              select.innerHTML = '<option value=\"\">--- Pasirinkti klientą ---</option>';
+
+              clients.forEach(c => {
+                  const opt = document.createElement('option');
+                  opt.value = c.id;
+                  opt.textContent = c.name || '(be pavadinimo)';
+                  opt.dataset.address = c.address || '';
+                  opt.dataset.code = c.code || '';
+                  opt.dataset.vat = c.vat_code || '';
+                  select.appendChild(opt);
+              });
+
+              // Attach change handler once
+              if (!select.dataset.bound) {
+                  select.addEventListener('change', () => {
+                      const selectedId = select.value;
+                      if (!selectedId) return;
+                      const client = clients.find(c => c.id === selectedId);
+                      const form = document.getElementById('invoice-form');
+                      if (!form || !client) return;
+
+                      const clientNameInput = form.querySelector('[name=\"client_name\"]');
+                      if (clientNameInput) {
+                          clientNameInput.value = client.name || '';
+                      }
+                  });
+                  select.dataset.bound = 'true';
+              }
+          });
+      }
     </script>
 </body>
 </html>

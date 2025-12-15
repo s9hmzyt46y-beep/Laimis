@@ -4,6 +4,284 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Klientai - Mano Startuolis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Mano Startuolis</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Išlaidos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/invoices">Sąskaitos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/clients">Klientai</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Left Column: New Client Form -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Naujas klientas</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="client-form">
+                            <div class="mb-3">
+                                <label class="form-label">Pavadinimas</label>
+                                <input type="text" class="form-control" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Įmonės kodas</label>
+                                <input type="text" class="form-control" name="code">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">PVM kodas</label>
+                                <input type="text" class="form-control" name="vat_code">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Adresas</label>
+                                <input type="text" class="form-control" name="address">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">El. paštas</label>
+                                <input type="email" class="form-control" name="email">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Telefonas</label>
+                                <input type="text" class="form-control" name="phone">
+                            </div>
+                            <button type="button" id="save-client-btn" class="btn btn-primary w-100">
+                                Išsaugoti klientą
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Clients List -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Klientų sąrašas</h5>
+                        <small class="text-muted" id="clients-count">0 klientų</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Pavadinimas</th>
+                                        <th>Kodas</th>
+                                        <th>Veiksmai</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clients-table-body">
+                                    <!-- Pildoma iš InstantDB -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="clients-empty" class="alert alert-info mb-0" style="display: none;">
+                            Dar nėra pridėtų klientų. Užpildykite formą kairėje, kad pridėtumėte pirmą klientą.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const clientForm = document.getElementById('client-form');
+        const saveClientBtn = document.getElementById('save-client-btn');
+        const clientsTableBody = document.getElementById('clients-table-body');
+        const clientsCountEl = document.getElementById('clients-count');
+        const clientsEmptyEl = document.getElementById('clients-empty');
+
+        function getClientFormData() {
+            const formData = new FormData(clientForm);
+            const data = {};
+            for (const [key, value] of formData.entries()) {
+                data[key] = value.trim();
+            }
+            return data;
+        }
+
+        function clearClientForm() {
+            clientForm.reset();
+        }
+
+        function renderClients(clients) {
+            clientsTableBody.innerHTML = '';
+            if (!clients || clients.length === 0) {
+                clientsEmptyEl.style.display = 'block';
+                clientsCountEl.textContent = '0 klientų';
+                return;
+            }
+
+            clientsEmptyEl.style.display = 'none';
+            clientsCountEl.textContent = clients.length + ' klientų';
+
+            clients.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${c.name || '-'}</td>
+                    <td>${c.code || '-'}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-danger" data-id="${c.id}">
+                            🗑️ Ištrinti
+                        </button>
+                    </td>
+                `;
+                const deleteBtn = tr.querySelector('button');
+                deleteBtn.addEventListener('click', () => {
+                    if (confirm('Ar tikrai norite ištrinti šį klientą?')) {
+                        deleteClient(c.id);
+                    }
+                });
+                clientsTableBody.appendChild(tr);
+            });
+        }
+
+        async function saveClient() {
+            if (!window.db || !window.tx || !window.id) {
+                alert('Duomenų bazė neparuošta (InstantDB).');
+                return;
+            }
+            const data = getClientFormData();
+            if (!data.name) {
+                alert('Pavadinimas yra privalomas.');
+                return;
+            }
+
+            const newId = window.id();
+            try {
+                await window.db.transact([
+                    window.tx.clients[newId].update({
+                        id: newId,
+                        name: data.name,
+                        code: data.code || '',
+                        vat_code: data.vat_code || '',
+                        address: data.address || '',
+                        email: data.email || '',
+                        phone: data.phone || '',
+                        createdAt: new Date().toISOString()
+                    })
+                ]);
+                clearClientForm();
+            } catch (e) {
+                console.error('Klaida saugant klientą:', e);
+                alert('Nepavyko išsaugoti kliento: ' + (e.message || 'nežinoma klaida'));
+            }
+        }
+
+        async function deleteClient(clientId) {
+            if (!window.db || !window.tx) {
+                alert('Duomenų bazė neparuošta (InstantDB).');
+                return;
+            }
+            try {
+                await window.db.transact([
+                    window.tx.clients[clientId].delete()
+                ]);
+            } catch (e) {
+                console.error('Klaida trinant klientą:', e);
+                alert('Nepavyko ištrinti kliento: ' + (e.message || 'nežinoma klaida'));
+            }
+        }
+
+        saveClientBtn.addEventListener('click', saveClient);
+    </script>
+
+    <!-- InstantDB integration -->
+    <script type="module">
+      import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
+
+      const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
+
+      let db;
+      try {
+          db = init({ appId: APP_ID });
+          window.db = db;
+          window.tx = tx;
+          window.id = id;
+          console.log("✅ InstantDB (clients) prisijungė");
+      } catch (e) {
+          console.error("Klaida jungiantis prie InstantDB (clients):", e);
+      }
+
+      if (db) {
+          db.subscribeQuery({ clients: {} }, (resp) => {
+              if (resp.error) {
+                  console.error('Klaida gaunant klientus:', resp.error);
+                  return;
+              }
+              const clients = resp.data.clients || [];
+              // Use global render function from main script
+              if (typeof window.renderClients === 'function') {
+                  window.renderClients(clients);
+              } else {
+                  // Fallback: simple inline rendering if needed
+                  const tbody = document.getElementById('clients-table-body');
+                  const emptyEl = document.getElementById('clients-empty');
+                  const countEl = document.getElementById('clients-count');
+                  if (!tbody) return;
+                  tbody.innerHTML = '';
+                  if (!clients.length) {
+                      if (emptyEl) emptyEl.style.display = 'block';
+                      if (countEl) countEl.textContent = '0 klientų';
+                      return;
+                  }
+                  if (emptyEl) emptyEl.style.display = 'none';
+                  if (countEl) countEl.textContent = clients.length + ' klientų';
+                  clients.forEach(c => {
+                      const tr = document.createElement('tr');
+                      tr.innerHTML = `
+                          <td>${c.name || '-'}</td>
+                          <td>${c.code || '-'}</td>
+                          <td>
+                              <button type="button" class="btn btn-sm btn-danger" data-id="${c.id}">
+                                  🗑️ Ištrinti
+                              </button>
+                          </td>
+                      `;
+                      const deleteBtn = tr.querySelector('button');
+                      deleteBtn.addEventListener('click', () => {
+                          if (confirm('Ar tikrai norite ištrinti šį klientą?')) {
+                              if (window.deleteClient) {
+                                  window.deleteClient(c.id);
+                              }
+                          }
+                      });
+                      tbody.appendChild(tr);
+                  });
+              }
+          });
+      }
+    </script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klientai - Mano Startuolis</title>
     <!-- Bootstrap CSS from CDN - makes styling easy without writing custom CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>

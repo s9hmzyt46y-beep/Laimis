@@ -76,6 +76,15 @@ def invoices():
     """
     return render_template('invoices.html')
 
+
+@app.route('/clients', methods=['GET'])
+def clients():
+    """
+    Clients page - standalone frontend view for managing clients.
+    Currently purely front-end (InstantDB or other JS can be used).
+    """
+    return render_template('clients.html')
+
 @app.route('/scan-receipt', methods=['POST'])
 def scan_receipt():
     """
