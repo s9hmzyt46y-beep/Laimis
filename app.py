@@ -244,86 +244,109 @@ def scan_receipt():
                 print(f"OpenAI client initialization error: {e}")
                 return jsonify({"error": f"Nepavyko inicializuoti OpenAI: {str(e)}"}), 500
         
-        # STEP 3: Build system prompt for Lithuanian receipt digitization
+        # STEP 3: Build system prompt for Lithuanian receipt digitization - ULTRA PRECISE
         STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
         
-        system_prompt = f"""Esi profesionalus lietuviškų čekių ir sąskaitų skaitymo robotas. Tavo tikslas - 100% tiksliai nuskaityti LIETUVIŠKĄ tekstą.
+        system_prompt = f"""# LIETUVIŠKŲ ČEKIŲ OCR ROBOTAS - 100% TIKSLUMAS
 
-## SVARBU: Čekiai yra LIETUVIŲ kalba!
+Tu esi PROFESIONALUS lietuviškų čekių skaitytuvas. Tavo VIENINTELĖ užduotis - TIKSLIAI perskaityti kiekvieną simbolį.
 
-### Lietuviški parduotuvių pavadinimai:
-- MAXIMA, IKI, LIDL, RIMI, NORFA - maisto prekių parduotuvės
-- CIRCLE K, VIADA, ORLEN - degalinės
-- SENUKAI, MOKI-VEŽI, ERMITAŽAS - statybinės medžiagos
-- EUROVAISTINĖ, CAMELIA, GINTARINĖ VAISTINĖ - vaistinės
-- TOPO CENTRAS, ELEKTROMARKT, PIGU - elektronika
+## ⚠️ GRIEŽTOS TAISYKLĖS:
 
-### Lietuviški produktų pavadinimai (pavyzdžiai):
-MAISTAS: duona, pienas, sviestas, kiaušiniai, mėsa, vištiena, kiauliena, jautiena, žuvis, lašiša, sūris, varškė, grietinė, jogurtas, kefyras, alus, vynas, sultys, vanduo, kava, arbata, cukrus, druska, miltai, ryžiai, makaronai, bulvės, morkos, svogūnai, pomidorai, agurkai, obuoliai, bananai, apelsinai, saldainiai, šokoladas, ledai, pyragas, bandelės, sumuštinis
+### 1. TEKSTAS TURI BŪTI TIKSLUS
+- Kopijuok produktų pavadinimus TIKSLIAI kaip jie parašyti čekyje
+- NEKEISK žodžių, NEVERSK į anglų kalbą
+- Jei matai "PIENAS 2.5%" - rašyk "PIENAS 2.5%", NE "milk"
+- Jei matai "DUONA BALTA" - rašyk "DUONA BALTA", NE "white bread"
+- Jei matai sutrumpinimą kaip "POM.TRINT.680G" - rašyk tiksliai taip
 
-BUITINĖ CHEMIJA: skalbimo milteliai, indų ploviklis, grindų valiklis, WC valiklis, dezodorantas, šampūnas, muilas, dantų pasta, tualetinis popierius, servetėlės, skalbimo kapsulės, minkštiklis, baliklis
+### 2. LIETUVIŠKI ČEKIŲ FORMATAI
+Tipinis lietuviškas čekis:
+```
+UAB MAXIMA LT
+Pirkimo data: 2024-12-15
+--------------------------
+PIENAS 2.5% 1L          1.29
+DUONA BALTA             0.89
+SVIESTAS 82%            2.49
+--------------------------
+VISO:                   4.67
+PVM 21%:                0.81
+```
 
-TRANSPORTAS: degalai, benzinas, dyzelinas, parkavimas, automobilių plovykla, tepalai, aušinimo skystis
+### 3. KAIP SKAITYTI EILUTES
+Kiekviena eilutė paprastai yra: [PRODUKTO PAVADINIMAS] [KAINA]
+- Pavadinimas gali turėti skaičius (pvz., "2.5%", "500G")
+- Kaina visada dešinėje pusėje
+- Ignoruok kiekį ir vienetų kainas - imk TIK galutinę kainą
 
-BIURAS: popierius, rašikliai, sąsiuviniai, segtukai, vokai, spausdintuvas, rašalas
-
-### Kategorijos (naudok TIK šias):
+### 4. KATEGORIJOS (PRIVALOMA naudoti TIK šias):
 {STRICT_CATEGORIES}
 
-### Kategorijų taisyklės:
-- 'Maistas': visi maisto produktai, gėrimai, restoranai, kavinės, barai
-- 'Transportas': degalai, parkavimas, viešasis transportas, taksi, autoservisas
-- 'Nuoma': nuomos mokesčiai, būsto nuoma
-- 'Komunaliniai': elektra, vanduo, dujos, internetas, telefonas, šildymas
-- 'Biuras': kanceliarinės prekės, popierius, spausdintuvai
-- 'Švara': valymo paslaugos, profesionalus valymas
-- 'Buitinė chemija': plovikliai, šampūnai, higienos prekės, valymo priemonės
-- 'Paslaugos': remonto paslaugos, konsultacijos
-- 'Kiti': visa kita, nuolaidos, mokesčiai
+Kategorijų logika:
+- Bet koks maistas/gėrimas → "Maistas"
+- Degalai, parkavimas → "Transportas"  
+- Plovikliai, šampūnai, higiena → "Buitinė chemija"
+- Popierius, rašikliai → "Biuras"
+- Elektra, vanduo, internetas → "Komunaliniai"
+- Nuoma → "Nuoma"
+- Valymo paslaugos → "Švara"
+- Kitos paslaugos → "Paslaugos"
+- Visa kita → "Kiti"
 
-### Lietuviški čekių terminai:
-- "VISO" arba "IŠ VISO" = bendra suma
-- "MOKĖTI" = suma mokėjimui
-- "PVM" = pridėtinės vertės mokestis (21% arba 9%)
-- "Suma be PVM" = grynoji suma
-- "Grąža" = grąžinti pinigai
-- "Nuolaida" = discount (neigiama suma)
-- "vnt" arba "vnt." = vienetai
-- "kg" = kilogramai
+### 5. JSON FORMATAS
+```json
+{{
+  "items": [
+    {{
+      "vendor": "Maxima",
+      "date": "2024-12-15",
+      "description": "PIENAS 2.5% 1L",
+      "amount": 1.29,
+      "vat_amount": 0.22,
+      "net_amount": 1.07,
+      "category": "Maistas"
+    }}
+  ]
+}}
+```
 
-### JSON formatas:
-Grąžink JSON: {{ "items": [{{vendor, date, description, amount, vat_amount, net_amount, category}}, ...] }}
+### 6. PVM SKAIČIAVIMAS
+- Lietuvoje standartinis PVM = 21%
+- Jei amount = 1.29, tai:
+  - net_amount = 1.29 / 1.21 = 1.07
+  - vat_amount = 1.29 - 1.07 = 0.22
 
-Kiekvienam produktui:
-- 'vendor': parduotuvės pavadinimas (pvz., 'Maxima', 'Lidl', 'Circle K')
-- 'date': data YYYY-MM-DD formatu
-- 'description': produkto pavadinimas LIETUVIŠKAI (tiksliai kaip čekyje)
-- 'amount': kaina SU PVM (bendra suma)
-- 'vat_amount': PVM suma
-- 'net_amount': suma BE PVM
-- 'category': kategorija iš sąrašo aukščiau
+### 7. PARDUOTUVIŲ ATPAŽINIMAS
+- "UAB MAXIMA LT" → "Maxima"
+- "LIDL LIETUVA" → "Lidl"
+- "IKI" → "Iki"
+- "RIMI LIETUVA" → "Rimi"
+- "CIRCLE K" → "Circle K"
+- "VIADA" → "Viada"
 
-### PVM skaičiavimas Lietuvoje:
-- Standartinis PVM: 21%
-- Sumažintas PVM (knygos, šildymas): 9%
-- Jei PVM = 21%, tai: net_amount = amount / 1.21, vat_amount = amount - net_amount
+## ❌ KO NEDARYTI:
+- NEVERSK produktų į anglų kalbą
+- NESUGALVOK produktų pavadinimų
+- NESUMUOK kelių produktų į vieną
+- NEPRALEISK jokių eilučių
 
-KRITIŠKAI SVARBU: 
-1. Skaityk KIEKVIENĄ eilutę - neskipink ir nesumuok!
-2. Produktų pavadinimus rašyk LIETUVIŠKAI (kaip čekyje)
-3. Jei tekstas neįskaitomas, grąžink {{"items": []}}"""
+## ✅ KĄ DARYTI:
+- Kopijuok TIKSLIAI kaip parašyta
+- Kiekvieną produktą į atskirą eilutę
+- Jei neįskaitoma - geriau praleisk nei sugalvok"""
         
-        # User prompt with Lithuanian-specific instructions
-        user_prompt = """Išanalizuok šį LIETUVIŠKĄ čekį/sąskaitą:
+        # User prompt - very specific
+        user_prompt = """TIKSLIAI nuskaityk šį lietuvišką čekį.
 
-1. Surask parduotuvės pavadinimą (pvz., MAXIMA, IKI, LIDL, CIRCLE K)
-2. Surask datą (formatas: YYYY-MM-DD)
-3. Išskaityk KIEKVIENĄ produktą su kaina
-4. Surask "VISO" arba "MOKĖTI" sumą apačioje
-5. Surask PVM informaciją (gali būti "PVM 21%" arba "PVM suma")
-6. Priskirk tinkamą kategoriją kiekvienam produktui
+INSTRUKCIJOS:
+1. Rask parduotuvės pavadinimą viršuje
+2. Rask datą (formatas YYYY-MM-DD)
+3. Kiekvieną produkto eilutę kopijuok TIKSLIAI kaip parašyta
+4. Kiekvienam produktui priskirk kategoriją
+5. Apskaičiuok PVM (21%)
 
-SVARBU: Produktų pavadinimus rašyk LIETUVIŠKAI, tiksliai kaip jie parašyti čekyje!
+⚠️ SVARBIAUSIAI: description lauke turi būti TIKSLUS tekstas iš čekio, ne tavo interpretacija!
 
 Grąžink JSON su visais produktais."""
 

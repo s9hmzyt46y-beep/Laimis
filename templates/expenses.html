@@ -252,6 +252,9 @@
                                           placeholder="Papildoma informacija apie išlaidą"></textarea>
                             </div>
                             
+                            <!-- Hidden field to store scanned image data -->
+                            <input type="hidden" id="scannedImageData" name="scannedImageData" value="">
+                            
                             <!-- File Upload -->
                             <div class="mb-3">
                                 <label for="file" class="form-label">Čekis / Sąskaita</label>
@@ -359,8 +362,15 @@
                     </div>
                     <div id="view-file-container" style="display: none;">
                         <hr>
-                        <div class="alert alert-info mb-0">
-                            <small>💡 Serverless aplinkoje originalūs failai neišsaugomi. Duomenys išgauti AI nuskaitymo metu.</small>
+                        <h6>📎 Originalus čekis:</h6>
+                        <div id="view-file-preview" class="text-center p-2 bg-light border rounded" style="max-height: 400px; overflow: auto;">
+                            <!-- Image preview will be inserted here -->
+                        </div>
+                    </div>
+                    <div id="view-no-file-container" style="display: none;">
+                        <hr>
+                        <div class="alert alert-secondary mb-0">
+                            <small>📄 Originalus failas neprisegtas prie šios išlaidos.</small>
                         </div>
                     </div>
                 </div>
@@ -698,6 +708,29 @@
                         categoryField.value = item.category;
                         categoryField.style.backgroundColor = '#d4edda';
                         setTimeout(() => categoryField.style.backgroundColor = '', 2000);
+                    }
+                    
+                    // Fill description from AI
+                    const descField = document.querySelector('[name="description"]');
+                    if (descField && item.description) {
+                        descField.value = item.description;
+                        descField.style.backgroundColor = '#d4edda';
+                        setTimeout(() => descField.style.backgroundColor = '', 2000);
+                    }
+                    
+                    // STORE ORIGINAL IMAGE as base64 for later viewing
+                    try {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const imageDataField = document.getElementById('scannedImageData');
+                            if (imageDataField) {
+                                imageDataField.value = e.target.result;
+                                console.log('✅ Original image stored for viewing');
+                            }
+                        };
+                        reader.readAsDataURL(fileToUpload);
+                    } catch (imgErr) {
+                        console.warn('Could not store image:', imgErr);
                     }
                     
                     // Show success
@@ -1277,6 +1310,7 @@
           const categoryEl = document.getElementById('category');
           const amountEl = document.getElementById('amount');
           const descriptionEl = document.getElementById('description');
+          const imageDataEl = document.getElementById('scannedImageData');
           
           // Validate
           if (!dateEl.value || !vendorEl.value || !categoryEl.value || !amountEl.value) {
@@ -1288,6 +1322,9 @@
           // Calculate VAT (21% standard)
           const vat = amount - (amount / 1.21);
           const net = amount - vat;
+          
+          // Get stored image data (if scanned)
+          const imageData = imageDataEl ? imageDataEl.value : '';
           
           try {
               const newId = window.id();
@@ -1301,6 +1338,7 @@
                       net: net,
                       vat: vat,
                       description: descriptionEl ? descriptionEl.value : '',
+                      imageData: imageData, // Store original image for viewing
                       createdAt: new Date().toISOString()
                   })
               ]);
@@ -1311,6 +1349,7 @@
               categoryEl.selectedIndex = 0;
               amountEl.value = '';
               if (descriptionEl) descriptionEl.value = '';
+              if (imageDataEl) imageDataEl.value = ''; // Clear stored image
               
               alert('✅ Išlaida išsaugota!');
           } catch (err) {
@@ -1359,7 +1398,7 @@
                   <td class="text-end">${vat.toFixed(2)} €</td>
                   <td class="text-end"><strong>${amount.toFixed(2)} €</strong></td>
                   <td class="text-center">
-                      <button class="btn btn-sm btn-outline-primary me-1" onclick="window.viewExpense('${exp.id}')" title="Peržiūrėti">👁️</button>
+                      <button class="btn btn-sm ${exp.imageData ? 'btn-primary' : 'btn-outline-primary'} me-1" onclick="window.viewExpense('${exp.id}')" title="${exp.imageData ? 'Peržiūrėti su čekio nuotrauka' : 'Peržiūrėti'}">${exp.imageData ? '📷' : '👁️'}</button>
                       <button class="btn btn-sm btn-outline-danger" onclick="window.deleteExpense('${exp.id}')" title="Trinti">🗑️</button>
                   </td>
               `;
@@ -1553,10 +1592,21 @@
           document.getElementById('view-vat').textContent = (parseFloat(expense.vat) || 0).toFixed(2);
           document.getElementById('view-amount').textContent = (parseFloat(expense.amount) || 0).toFixed(2);
           
-          // File info section (serverless - no actual files stored)
+          // File preview section - show original image if available
           const fileContainer = document.getElementById('view-file-container');
-          // Always show info that files aren't stored in serverless
-          fileContainer.style.display = 'block';
+          const noFileContainer = document.getElementById('view-no-file-container');
+          const filePreview = document.getElementById('view-file-preview');
+          
+          if (expense.imageData) {
+              // Show the stored original image
+              fileContainer.style.display = 'block';
+              noFileContainer.style.display = 'none';
+              filePreview.innerHTML = `<img src="${expense.imageData}" class="img-fluid" style="max-height: 380px;" alt="Originalus čekis">`;
+          } else {
+              // No image stored
+              fileContainer.style.display = 'none';
+              noFileContainer.style.display = 'block';
+          }
           
           // Setup delete button in modal
           document.getElementById('modal-delete-btn').onclick = function() {
