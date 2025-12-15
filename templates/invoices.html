@@ -84,18 +84,53 @@
                         <form id="invoice-form">
                             <input type="hidden" id="editing-invoice-id" value="">
                             
+                            <!-- Pardavėjo duomenys -->
+                            <div class="card bg-light mb-3">
+                                <div class="card-header py-2">
+                                    <strong>🏢 Pardavėjo duomenys</strong>
+                                    <button type="button" class="btn btn-sm btn-link float-end" data-bs-toggle="collapse" data-bs-target="#sellerDetails">
+                                        ▼ Rodyti/Slėpti
+                                    </button>
+                                </div>
+                                <div class="collapse show" id="sellerDetails">
+                                    <div class="card-body py-2">
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" name="seller_name" placeholder="Įmonės pavadinimas" value="">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" name="seller_code" placeholder="Įmonės kodas">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" name="seller_vat" placeholder="PVM mokėtojo kodas">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" name="seller_bank" placeholder="Banko sąskaita (IBAN)">
+                                            </div>
+                                            <div class="col-12">
+                                                <input type="text" class="form-control form-control-sm" name="seller_address" placeholder="Adresas">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pirkėjo ir sąskaitos duomenys -->
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">Klientas</label>
+                                    <label class="form-label">👤 Pirkėjas</label>
                                     <select id="clientSelect" class="form-select mb-2">
                                         <option value="">--- Pasirinkti ---</option>
                                     </select>
                                     <input type="text" class="form-control" name="client_name" placeholder="Kliento pavadinimas" required>
+                                    <input type="text" class="form-control form-control-sm mt-1" name="client_code" placeholder="Įmonės kodas">
+                                    <input type="text" class="form-control form-control-sm mt-1" name="client_vat" placeholder="PVM kodas">
+                                    <input type="text" class="form-control form-control-sm mt-1" name="client_address" placeholder="Adresas">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Sąskaitos Nr.</label>
+                                    <label class="form-label">📄 Sąskaitos Nr.</label>
                                     <input type="text" class="form-control" name="invoice_number" placeholder="SF-001" required>
-                                    <label class="form-label mt-2">Data</label>
+                                    <label class="form-label mt-2">📅 Data</label>
                                     <input type="date" class="form-control" name="date" required>
                                 </div>
                             </div>
@@ -293,7 +328,21 @@
         // Load invoice into form for editing
         window.loadInvoiceToForm = function(invoice) {
             const form = document.getElementById('invoice-form');
+            
+            // Pardavėjo duomenys
+            if (form.querySelector('[name="seller_name"]')) form.querySelector('[name="seller_name"]').value = invoice.seller_name || '';
+            if (form.querySelector('[name="seller_code"]')) form.querySelector('[name="seller_code"]').value = invoice.seller_code || '';
+            if (form.querySelector('[name="seller_vat"]')) form.querySelector('[name="seller_vat"]').value = invoice.seller_vat || '';
+            if (form.querySelector('[name="seller_bank"]')) form.querySelector('[name="seller_bank"]').value = invoice.seller_bank || '';
+            if (form.querySelector('[name="seller_address"]')) form.querySelector('[name="seller_address"]').value = invoice.seller_address || '';
+            
+            // Pirkėjo duomenys
             form.querySelector('[name="client_name"]').value = invoice.client_name || '';
+            if (form.querySelector('[name="client_code"]')) form.querySelector('[name="client_code"]').value = invoice.client_code || '';
+            if (form.querySelector('[name="client_vat"]')) form.querySelector('[name="client_vat"]').value = invoice.client_vat || '';
+            if (form.querySelector('[name="client_address"]')) form.querySelector('[name="client_address"]').value = invoice.client_address || '';
+            
+            // Sąskaitos duomenys
             form.querySelector('[name="invoice_number"]').value = invoice.invoice_number || '';
             form.querySelector('[name="date"]').value = invoice.date || '';
             document.getElementById('editing-invoice-id').value = invoice.id || '';
@@ -496,7 +545,18 @@
             });
 
             const invoiceData = {
+                // Pardavėjo duomenys
+                seller_name: form.querySelector('[name="seller_name"]')?.value.trim() || '',
+                seller_code: form.querySelector('[name="seller_code"]')?.value.trim() || '',
+                seller_vat: form.querySelector('[name="seller_vat"]')?.value.trim() || '',
+                seller_bank: form.querySelector('[name="seller_bank"]')?.value.trim() || '',
+                seller_address: form.querySelector('[name="seller_address"]')?.value.trim() || '',
+                // Pirkėjo duomenys
                 client_name: form.querySelector('[name="client_name"]').value.trim(),
+                client_code: form.querySelector('[name="client_code"]')?.value.trim() || '',
+                client_vat: form.querySelector('[name="client_vat"]')?.value.trim() || '',
+                client_address: form.querySelector('[name="client_address"]')?.value.trim() || '',
+                // Sąskaitos duomenys
                 invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
                 date: form.querySelector('[name="date"]').value,
                 items: items,
@@ -562,15 +622,50 @@
                 </tr>`;
             });
 
-            document.getElementById('modal-invoice-body').innerHTML = `
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Klientas:</strong> ${invoice.client_name}<br>
-                        <strong>Data:</strong> ${invoice.date}
+            // Pardavėjo info
+            let sellerInfo = '';
+            if (invoice.seller_name) {
+                sellerInfo = `
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <h6 class="card-title mb-1">🏢 Pardavėjas</h6>
+                                <strong>${invoice.seller_name}</strong><br>
+                                ${invoice.seller_code ? `Įm. kodas: ${invoice.seller_code}<br>` : ''}
+                                ${invoice.seller_vat ? `PVM kodas: ${invoice.seller_vat}<br>` : ''}
+                                ${invoice.seller_bank ? `IBAN: ${invoice.seller_bank}<br>` : ''}
+                                ${invoice.seller_address ? `${invoice.seller_address}` : ''}
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            // Pirkėjo info
+            let buyerInfo = `
+                <div class="col-md-6 mb-3">
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <h6 class="card-title mb-1">👤 Pirkėjas</h6>
+                            <strong>${invoice.client_name}</strong><br>
+                            ${invoice.client_code ? `Įm. kodas: ${invoice.client_code}<br>` : ''}
+                            ${invoice.client_vat ? `PVM kodas: ${invoice.client_vat}<br>` : ''}
+                            ${invoice.client_address ? `${invoice.client_address}` : ''}
+                        </div>
                     </div>
-                    <div class="col-md-6 text-end">
+                </div>`;
+
+            document.getElementById('modal-invoice-body').innerHTML = `
+                <div class="row mb-2">
+                    <div class="col-md-6">
                         <strong>Sąskaitos Nr.:</strong> ${invoice.invoice_number}
                     </div>
+                    <div class="col-md-6 text-end">
+                        <strong>Data:</strong> ${invoice.date}
+                    </div>
+                </div>
+                <div class="row">
+                    ${sellerInfo}
+                    ${buyerInfo}
                 </div>
                 <table class="table table-bordered">
                     <thead class="table-light">
@@ -649,7 +744,18 @@
                 }
             });
             return {
+                // Pardavėjo duomenys
+                seller_name: form.querySelector('[name="seller_name"]')?.value.trim() || '',
+                seller_code: form.querySelector('[name="seller_code"]')?.value.trim() || '',
+                seller_vat: form.querySelector('[name="seller_vat"]')?.value.trim() || '',
+                seller_bank: form.querySelector('[name="seller_bank"]')?.value.trim() || '',
+                seller_address: form.querySelector('[name="seller_address"]')?.value.trim() || '',
+                // Pirkėjo duomenys
                 client_name: form.querySelector('[name="client_name"]').value.trim(),
+                client_code: form.querySelector('[name="client_code"]')?.value.trim() || '',
+                client_vat: form.querySelector('[name="client_vat"]')?.value.trim() || '',
+                client_address: form.querySelector('[name="client_address"]')?.value.trim() || '',
+                // Sąskaitos duomenys
                 invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
                 date: form.querySelector('[name="date"]').value,
                 items: items,

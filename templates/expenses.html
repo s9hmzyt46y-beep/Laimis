@@ -134,6 +134,7 @@
                                 <tr>
                                     <th>Data</th>
                                     <th>Tiekėjas</th>
+                                    <th>Aprašymas</th>
                                     <th>Kategorija</th>
                                     <th>Kaina be PVM</th>
                                     <th>PVM</th>
@@ -283,32 +284,29 @@
             <!-- Right Column: Expenses Table -->
             <div class="col-lg-8">
                 <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Išlaidų sąrašas ({{ expenses|length }})</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📋 Išsaugotos išlaidos <span id="expenses-count" class="badge bg-secondary">0</span></h5>
                     </div>
-                    <div class="card-body">
-                        {% if expenses %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Data</th>
-                                            <th>Tiekėjas</th>
-                                            <th>Kategorija</th>
-                                            <th class="text-end">Suma</th>
-                                            <th class="text-center">Čekis</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="expenses-list">
-                                        <!-- Filled dynamically via InstantDB -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="alert alert-info">
-                                <p class="mb-0">Dar nėra pridėtų išlaidų. Naudokite formą kairėje, kad pridėtumėte pirmąją išlaidą.</p>
-                            </div>
-                        {% endif %}
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Tiekėjas</th>
+                                        <th>Aprašymas</th>
+                                        <th>Kategorija</th>
+                                        <th class="text-end">Be PVM</th>
+                                        <th class="text-end">PVM</th>
+                                        <th class="text-end">Suma</th>
+                                        <th class="text-center">Veiksmai</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expenses-list">
+                                    <tr><td colspan="8" class="text-center text-muted py-4">⏳ Kraunama...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -671,6 +669,10 @@
             const vendorCell = document.createElement('td');
             vendorCell.innerHTML = `<input type="text" class="form-control form-control-sm" name="vendor" value="${item.vendor || ''}" required>`;
             
+            // Description input
+            const descriptionCell = document.createElement('td');
+            descriptionCell.innerHTML = `<input type="text" class="form-control form-control-sm" name="description" value="${item.description || ''}" style="max-width:150px;">`;
+            
             // Category select
             const categoryCell = document.createElement('td');
             const selectInput = document.createElement('select');
@@ -776,6 +778,7 @@
             // Append cells to row
             row.appendChild(dateCell);
             row.appendChild(vendorCell);
+            row.appendChild(descriptionCell);
             row.appendChild(categoryCell);
             row.appendChild(netAmountCell);
             row.appendChild(vatAmountCell);
@@ -960,33 +963,87 @@
           });
       }
 
-      // 4. Render expenses table
+      // 4. Render expenses table with statistics
       function renderMainTable(expenses) {
           const tbody = document.getElementById('expenses-list');
+          const countEl = document.getElementById('expenses-count');
           if (!tbody) return;
           tbody.innerHTML = '';
           
           const sorted = expenses ? expenses.sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+          
+          if (sorted.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">📭 Nėra išsaugotų išlaidų</td></tr>';
+              if (countEl) countEl.textContent = '0';
+              document.getElementById('monthly-total').textContent = '0.00';
+              return;
+          }
+          
           let total = 0;
+          let netTotal = 0;
+          let vatTotal = 0;
 
           sorted.forEach(exp => {
-              total += (parseFloat(exp.amount) || 0);
+              const amount = parseFloat(exp.amount) || 0;
+              const net = parseFloat(exp.net) || 0;
+              const vat = parseFloat(exp.vat) || 0;
+              
+              total += amount;
+              netTotal += net;
+              vatTotal += vat;
+              
+              const categoryClass = getCategoryClass(exp.category);
               const row = document.createElement('tr');
               row.innerHTML = `
                   <td>${exp.date || '-'}</td>
-                  <td>${exp.vendor || '-'}</td>
-                  <td>${exp.category || '-'}</td>
-                  <td>${parseFloat(exp.net || 0).toFixed(2)}</td>
-                  <td>${parseFloat(exp.vat || 0).toFixed(2)}</td>
-                  <td><strong>${parseFloat(exp.amount || 0).toFixed(2)}</strong></td>
-                  <td>${exp.fileUrl ? '<a href="'+exp.fileUrl+'" target="_blank">Failas</a>' : '-'}</td>
+                  <td><strong>${exp.vendor || '-'}</strong></td>
+                  <td class="text-muted" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${exp.description || ''}">${exp.description || '-'}</td>
+                  <td><span class="badge ${categoryClass}">${exp.category || 'Kiti'}</span></td>
+                  <td class="text-end">${net.toFixed(2)} €</td>
+                  <td class="text-end">${vat.toFixed(2)} €</td>
+                  <td class="text-end"><strong>${amount.toFixed(2)} €</strong></td>
+                  <td class="text-center">
+                      <button class="btn btn-sm btn-outline-danger" onclick="window.deleteExpense('${exp.id}')" title="Trinti">🗑️</button>
+                  </td>
               `;
               tbody.appendChild(row);
           });
           
-          const totalEl = document.getElementById('monthly-total');
-          if (totalEl) totalEl.innerText = total.toFixed(2);
+          // Update statistics
+          if (countEl) countEl.textContent = sorted.length;
+          document.getElementById('monthly-total').textContent = total.toFixed(2);
       }
+      
+      // Helper: Get category badge class
+      function getCategoryClass(category) {
+          const classes = {
+              'Maistas': 'bg-success',
+              'Transportas': 'bg-primary',
+              'Nuoma': 'bg-warning text-dark',
+              'Komunaliniai': 'bg-info',
+              'Biuras': 'bg-secondary',
+              'Švara': 'bg-light text-dark',
+              'Buitinė chemija': 'bg-purple text-white',
+              'Paslaugos': 'bg-danger',
+              'Kiti': 'bg-dark'
+          };
+          return classes[category] || 'bg-secondary';
+      }
+      
+      // Delete expense
+      window.deleteExpense = async function(expenseId) {
+          if (!confirm('Ar tikrai norite ištrinti šią išlaidą?')) return;
+          
+          try {
+              await window.db.transact([
+                  window.tx.expenses[expenseId].delete()
+              ]);
+              console.log('Expense deleted:', expenseId);
+          } catch (e) {
+              console.error('Delete error:', e);
+              alert('Klaida trinant: ' + e.message);
+          }
+      };
 
       // 5. Save function with userId
       window.saveAllToInstantDB = function() {
@@ -1010,6 +1067,7 @@
               try {
                   const dateEl = row.querySelector('[name="date"]');
                   const vendorEl = row.querySelector('[name="vendor"]');
+                  const descriptionEl = row.querySelector('[name="description"]');
                   const categoryEl = row.querySelector('[name="category"]');
                   const amountEl = row.querySelector('[name="amount"]');
                   const netEl = row.querySelector('[name="net_amount"]');
@@ -1027,6 +1085,7 @@
                       userId: userId,  // USER DATA ISOLATION
                       date: dateEl.value,
                       vendor: vendorEl.value,
+                      description: descriptionEl ? descriptionEl.value : '',
                       category: categoryEl.value,
                       amount: parseFloat(amountEl.value) || 0,
                       net: parseFloat(netEl ? netEl.value : 0) || 0,

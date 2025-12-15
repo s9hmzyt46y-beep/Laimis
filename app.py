@@ -494,25 +494,28 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
 @app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
     """
-    Serverless PDF generation endpoint using FPDF with full VAT support.
-
-    Expects JSON payload:
-      {
-        "client_name": "...",
-        "invoice_number": "...",
-        "date": "YYYY-MM-DD",
-        "items": [{ "description": "...", "qty": 1, "net": 10.0, "vatRate": 21, "vatAmount": 2.1, "total": 12.1 }, ...],
-        "subtotal": 100.0,
-        "vat_total": 21.0,
-        "total": 121.0
-      }
+    Serverless PDF generation endpoint using FPDF2 with full Unicode support.
+    Supports Lithuanian characters and seller/buyer details.
     """
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON body provided"}), 400
 
+        # Seller details
+        seller_name = (data.get("seller_name") or "").strip()
+        seller_code = (data.get("seller_code") or "").strip()
+        seller_vat = (data.get("seller_vat") or "").strip()
+        seller_bank = (data.get("seller_bank") or "").strip()
+        seller_address = (data.get("seller_address") or "").strip()
+
+        # Buyer details
         client_name = (data.get("client_name") or "").strip()
+        client_code = (data.get("client_code") or "").strip()
+        client_vat = (data.get("client_vat") or "").strip()
+        client_address = (data.get("client_address") or "").strip()
+
+        # Invoice details
         invoice_number = (data.get("invoice_number") or "").strip()
         date_str = (data.get("date") or "").strip()
         items = data.get("items") or []
@@ -523,43 +526,114 @@ def generate_pdf():
         grand_total = float(data.get("total") or 0)
 
         if not client_name or not invoice_number or not date_str:
-            return jsonify({"error": "Missing required fields: client_name, invoice_number, date"}), 400
+            return jsonify({"error": "Trūksta privalomų laukų: kliento pavadinimas, sąskaitos nr., data"}), 400
 
         if not isinstance(items, list) or len(items) == 0:
-            return jsonify({"error": "Items array is required and must contain at least one item"}), 400
+            return jsonify({"error": "Būtina pridėti bent vieną prekę/paslaugą"}), 400
 
-        # Lazy import FPDF to avoid startup issues if not installed
+        # Import FPDF2 with Unicode support
         try:
             from fpdf import FPDF
         except ImportError:
-            return jsonify({"error": "PDF generator not available (missing fpdf). Please install fpdf."}), 500
+            return jsonify({"error": "PDF generatorius nepasiekiamas. Įdiekite fpdf2."}), 500
+
+        # Helper function to safely encode text
+        def safe_text(text):
+            """Replace Lithuanian characters with ASCII equivalents for basic FPDF"""
+            if not text:
+                return ""
+            replacements = {
+                'ą': 'a', 'č': 'c', 'ę': 'e', 'ė': 'e', 'į': 'i',
+                'š': 's', 'ų': 'u', 'ū': 'u', 'ž': 'z',
+                'Ą': 'A', 'Č': 'C', 'Ę': 'E', 'Ė': 'E', 'Į': 'I',
+                'Š': 'S', 'Ų': 'U', 'Ū': 'U', 'Ž': 'Z',
+                '€': 'EUR'
+            }
+            result = text
+            for lt_char, ascii_char in replacements.items():
+                result = result.replace(lt_char, ascii_char)
+            return result
 
         pdf = FPDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
 
-        # Header
-        pdf.set_font("Helvetica", "B", 18)
-        pdf.cell(0, 12, "SASKAITA FAKTURA", ln=True, align="C")
-        pdf.ln(5)
+        # ========== HEADER ==========
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_fill_color(41, 128, 185)  # Blue header
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 12, "SASKAITA FAKTURA", ln=True, align="C", fill=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(3)
 
-        # Invoice info box
-        pdf.set_font("Helvetica", "", 11)
-        pdf.cell(0, 7, f"Saskaitos Nr.: {invoice_number}", ln=True)
-        pdf.cell(0, 7, f"Data: {date_str}", ln=True)
-        pdf.cell(0, 7, f"Klientas: {client_name}", ln=True)
-        pdf.ln(8)
+        # Invoice number and date
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(95, 7, f"Saskaitos Nr.: {safe_text(invoice_number)}", border=0)
+        pdf.cell(95, 7, f"Data: {date_str}", border=0, align="R")
+        pdf.ln(10)
 
-        # Table header with VAT columns
+        # ========== SELLER & BUYER INFO ==========
+        pdf.set_fill_color(245, 245, 245)
+        
+        # Seller box (left side)
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(90, 7, "PARDAVEJAS:", ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 9)
+        
+        if seller_name:
+            pdf.cell(90, 5, safe_text(seller_name), ln=True)
+        else:
+            pdf.cell(90, 5, "(Nenurodyta)", ln=True)
+        
+        if seller_code:
+            pdf.cell(90, 5, f"Im. kodas: {safe_text(seller_code)}", ln=True)
+        if seller_vat:
+            pdf.cell(90, 5, f"PVM kodas: {safe_text(seller_vat)}", ln=True)
+        if seller_bank:
+            pdf.cell(90, 5, f"IBAN: {safe_text(seller_bank)}", ln=True)
+        if seller_address:
+            pdf.cell(90, 5, safe_text(seller_address), ln=True)
+        
+        seller_end_y = pdf.get_y()
+        
+        # Buyer box (right side)
+        pdf.set_xy(x_start + 100, y_start)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(90, 7, "PIRKEJAS:", ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_x(x_start + 100)
+        
+        pdf.cell(90, 5, safe_text(client_name), ln=True)
+        if client_code:
+            pdf.set_x(x_start + 100)
+            pdf.cell(90, 5, f"Im. kodas: {safe_text(client_code)}", ln=True)
+        if client_vat:
+            pdf.set_x(x_start + 100)
+            pdf.cell(90, 5, f"PVM kodas: {safe_text(client_vat)}", ln=True)
+        if client_address:
+            pdf.set_x(x_start + 100)
+            pdf.cell(90, 5, safe_text(client_address), ln=True)
+        
+        buyer_end_y = pdf.get_y()
+        
+        # Move to after both boxes
+        pdf.set_y(max(seller_end_y, buyer_end_y) + 8)
+
+        # ========== ITEMS TABLE ==========
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(60, 8, "Aprasymas", border=1, fill=True)
-        pdf.cell(15, 8, "Kiekis", border=1, align="C", fill=True)
-        pdf.cell(25, 8, "Kaina be PVM", border=1, align="C", fill=True)
-        pdf.cell(15, 8, "PVM %", border=1, align="C", fill=True)
-        pdf.cell(25, 8, "PVM suma", border=1, align="C", fill=True)
-        pdf.cell(30, 8, "Suma su PVM", border=1, align="C", fill=True)
+        pdf.set_fill_color(52, 73, 94)  # Dark header
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(55, 8, "Aprasymas", border=1, fill=True)
+        pdf.cell(18, 8, "Kiekis", border=1, align="C", fill=True)
+        pdf.cell(28, 8, "Kaina be PVM", border=1, align="C", fill=True)
+        pdf.cell(18, 8, "PVM %", border=1, align="C", fill=True)
+        pdf.cell(28, 8, "PVM suma", border=1, align="C", fill=True)
+        pdf.cell(28, 8, "Suma", border=1, align="C", fill=True)
         pdf.ln()
+        pdf.set_text_color(0, 0, 0)
 
         # Table rows
         pdf.set_font("Helvetica", "", 9)
@@ -567,11 +641,10 @@ def generate_pdf():
         calc_vat = 0.0
         calc_total = 0.0
 
-        for item in items:
-            desc = str(item.get("description", ""))[:40]
+        for i, item in enumerate(items):
+            desc = safe_text(str(item.get("description", ""))[:35])
             qty = float(item.get("qty") or 0)
             
-            # Support both old format (price) and new format (net)
             net = float(item.get("net") or item.get("price") or 0)
             vat_rate = float(item.get("vatRate") or 21)
             vat_amount = float(item.get("vatAmount") or (net * qty * vat_rate / 100))
@@ -582,12 +655,18 @@ def generate_pdf():
             calc_vat += vat_amount
             calc_total += total
 
-            pdf.cell(60, 7, desc, border=1)
-            pdf.cell(15, 7, f"{qty:.0f}", border=1, align="C")
-            pdf.cell(25, 7, f"{net:.2f} EUR", border=1, align="R")
-            pdf.cell(15, 7, f"{vat_rate:.0f}%", border=1, align="C")
-            pdf.cell(25, 7, f"{vat_amount:.2f} EUR", border=1, align="R")
-            pdf.cell(30, 7, f"{total:.2f} EUR", border=1, align="R")
+            # Alternating row colors
+            if i % 2 == 0:
+                pdf.set_fill_color(250, 250, 250)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            
+            pdf.cell(55, 7, desc, border=1, fill=True)
+            pdf.cell(18, 7, f"{qty:.0f}", border=1, align="C", fill=True)
+            pdf.cell(28, 7, f"{net:.2f} EUR", border=1, align="R", fill=True)
+            pdf.cell(18, 7, f"{vat_rate:.0f}%", border=1, align="C", fill=True)
+            pdf.cell(28, 7, f"{vat_amount:.2f} EUR", border=1, align="R", fill=True)
+            pdf.cell(28, 7, f"{total:.2f} EUR", border=1, align="R", fill=True)
             pdf.ln()
 
         # Use provided totals or calculated ones
@@ -595,37 +674,36 @@ def generate_pdf():
         final_vat = vat_total if vat_total > 0 else calc_vat
         final_total = grand_total if grand_total > 0 else calc_total
 
-        # Totals section
+        # ========== TOTALS SECTION ==========
         pdf.ln(5)
-        pdf.set_font("Helvetica", "", 11)
+        pdf.set_font("Helvetica", "", 10)
         
-        # Subtotal
-        pdf.cell(140, 7, "Suma be PVM:", align="R")
-        pdf.cell(30, 7, f"{final_subtotal:.2f} EUR", align="R")
+        # Right-aligned totals
+        pdf.cell(147, 7, "Suma be PVM:", align="R")
+        pdf.cell(28, 7, f"{final_subtotal:.2f} EUR", align="R", border=0)
         pdf.ln()
         
-        # VAT
-        pdf.cell(140, 7, "PVM suma:", align="R")
-        pdf.cell(30, 7, f"{final_vat:.2f} EUR", align="R")
+        pdf.cell(147, 7, "PVM suma:", align="R")
+        pdf.cell(28, 7, f"{final_vat:.2f} EUR", align="R", border=0)
         pdf.ln()
         
-        # Grand Total
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(140, 8, "BENDRA SUMA:", align="R")
-        pdf.cell(30, 8, f"{final_total:.2f} EUR", align="R")
+        pdf.set_fill_color(46, 204, 113)  # Green total
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(147, 9, "BENDRA SUMA:", align="R")
+        pdf.cell(28, 9, f"{final_total:.2f} EUR", align="R", fill=True)
+        pdf.set_text_color(0, 0, 0)
         pdf.ln(15)
 
-        # Footer
-        pdf.set_font("Helvetica", "", 9)
+        # ========== FOOTER ==========
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(128, 128, 128)
         pdf.cell(0, 6, "Dekojame uz bendradarbiavima!", ln=True, align="C")
+        pdf.set_font("Helvetica", "", 8)
+        pdf.cell(0, 5, f"Saskaita sugeneruota: {date_str}", ln=True, align="C")
 
-        # Output to bytes (serverless friendly)
-        pdf_str = pdf.output(dest="S")
-        if isinstance(pdf_str, str):
-            pdf_bytes = pdf_str.encode("latin-1")
-        else:
-            pdf_bytes = pdf_str  # already bytes in some FPDF versions
-
+        # Output to bytes
+        pdf_bytes = pdf.output()
         buffer = io.BytesIO(pdf_bytes)
         buffer.seek(0)
 
