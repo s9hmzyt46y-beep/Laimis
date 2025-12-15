@@ -8,181 +8,150 @@
     <style>
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
         .card { max-width: 420px; width: 100%; }
-        #status { font-size: 12px; padding: 8px; border-radius: 4px; margin-top: 15px; text-align: center; }
+        #status { font-size: 13px; padding: 10px; border-radius: 6px; margin-top: 15px; text-align: center; }
         .status-loading { background: #fff3cd; color: #856404; }
         .status-ok { background: #d4edda; color: #155724; }
         .status-error { background: #f8d7da; color: #721c24; }
+        .code-input { font-size: 28px; letter-spacing: 10px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card shadow p-4">
-        <h3 class="text-center mb-4">🚀 Mano Startuolis</h3>
+        <h3 class="text-center mb-2">🚀 Mano Startuolis</h3>
+        <p class="text-center text-muted mb-4">Prisijungimas per el. paštą</p>
         
-        <!-- LOGIN FORM -->
-        <div id="loginForm">
-            <h5 class="text-center mb-3">Prisijungimas</h5>
+        <!-- STEP 1: Email -->
+        <div id="step1">
             <div class="mb-3">
-                <label class="form-label">El. paštas</label>
-                <input type="email" id="loginEmail" class="form-control" placeholder="jusu@email.com">
+                <label class="form-label">El. pašto adresas</label>
+                <input type="email" id="email" class="form-control form-control-lg" placeholder="jusu@email.com">
             </div>
-            <div class="mb-3">
-                <label class="form-label">Slaptažodis</label>
-                <input type="password" id="loginPassword" class="form-control" placeholder="••••••••">
-            </div>
-            <button type="button" id="btnLogin" class="btn btn-primary w-100 mb-3">🔐 Prisijungti</button>
-            <div class="text-center">
-                <span>Neturite paskyros? </span>
-                <button type="button" id="showRegister" class="btn btn-link p-0">Registruotis</button>
-            </div>
+            <button type="button" id="btnSend" class="btn btn-primary btn-lg w-100">
+                📧 Gauti prisijungimo kodą
+            </button>
+            <p class="text-center text-muted mt-3 small">
+                Kodą gausite į el. paštą per kelias sekundes
+            </p>
         </div>
         
-        <!-- REGISTER FORM -->
-        <div id="registerForm" style="display: none;">
-            <h5 class="text-center mb-3">Registracija</h5>
-            <div class="mb-3">
-                <label class="form-label">El. paštas</label>
-                <input type="email" id="regEmail" class="form-control" placeholder="jusu@email.com">
+        <!-- STEP 2: Code -->
+        <div id="step2" style="display: none;">
+            <div class="alert alert-success">
+                ✅ Kodas išsiųstas į <strong id="sentEmail"></strong>
             </div>
             <div class="mb-3">
-                <label class="form-label">Slaptažodis</label>
-                <input type="password" id="regPassword" class="form-control" placeholder="Min. 6 simboliai">
+                <label class="form-label">6 skaitmenų kodas</label>
+                <input type="text" id="code" class="form-control code-input" placeholder="000000" maxlength="6">
             </div>
-            <div class="mb-3">
-                <label class="form-label">Pakartokite slaptažodį</label>
-                <input type="password" id="regPassword2" class="form-control" placeholder="••••••••">
-            </div>
-            <button type="button" id="btnRegister" class="btn btn-success w-100 mb-3">✅ Registruotis</button>
-            <div class="text-center">
-                <span>Jau turite paskyrą? </span>
-                <button type="button" id="showLogin" class="btn btn-link p-0">Prisijungti</button>
-            </div>
+            <button type="button" id="btnVerify" class="btn btn-success btn-lg w-100">
+                🔐 Prisijungti
+            </button>
+            <button type="button" id="btnBack" class="btn btn-link w-100 mt-2">
+                ← Įvesti kitą el. paštą
+            </button>
         </div>
         
-        <div id="status" class="status-loading">⏳ Kraunama...</div>
+        <div id="status" class="status-loading">⏳ Jungiamasi...</div>
     </div>
 
 <script type="module">
-// Status helper
 function setStatus(msg, type) {
     const el = document.getElementById('status');
-    if (el) {
-        el.textContent = msg;
-        el.className = 'status-' + type;
-    }
+    if (el) { el.textContent = msg; el.className = 'status-' + type; }
 }
 
-// Main
 (async function() {
     try {
-        setStatus('📦 Jungiamės...', 'loading');
+        setStatus('📦 Kraunama...', 'loading');
         
         const { init } = await import('https://esm.sh/@instantdb/core');
         const db = init({ appId: 'ad4539a9-2114-44bb-a2f4-524d57448deb' });
         
-        setStatus('✅ Paruošta!', 'ok');
+        setStatus('✅ Įveskite el. paštą', 'ok');
         
         // Check if already logged in
         db.subscribeAuth((auth) => {
             if (auth && auth.user) {
-                setStatus('✅ Prisijungęs: ' + auth.user.email, 'ok');
                 localStorage.setItem('currentUser', auth.user.email);
                 window.location.href = '/dashboard';
             }
         });
         
-        // DOM elements
-        const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
+        let userEmail = '';
         
-        // Toggle to Register
-        document.getElementById('showRegister').addEventListener('click', function() {
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
-            setStatus('📝 Užpildykite registracijos formą', 'ok');
-        });
+        // Elements
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const emailInput = document.getElementById('email');
+        const codeInput = document.getElementById('code');
+        const sentEmailSpan = document.getElementById('sentEmail');
         
-        // Toggle to Login
-        document.getElementById('showLogin').addEventListener('click', function() {
-            registerForm.style.display = 'none';
-            loginForm.style.display = 'block';
-            setStatus('✅ Paruošta!', 'ok');
-        });
-        
-        // LOGIN
-        document.getElementById('btnLogin').addEventListener('click', async function() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value;
+        // Send Code
+        document.getElementById('btnSend').addEventListener('click', async function() {
+            const email = emailInput.value.trim();
+            if (!email) return alert('Įveskite el. pašto adresą!');
+            if (!email.includes('@')) return alert('Neteisingas el. pašto formatas!');
             
-            if (!email || !password) {
-                return alert('Įveskite el. paštą ir slaptažodį!');
-            }
-            
+            userEmail = email;
             this.disabled = true;
-            this.textContent = '⏳ Jungiamasi...';
-            setStatus('🔄 Tikrinama...', 'loading');
+            this.textContent = '⏳ Siunčiama...';
+            setStatus('📤 Siunčiame kodą...', 'loading');
             
             try {
-                await db.auth.signInWithCredential({ email, password });
+                await db.auth.sendMagicCode({ email });
+                sentEmailSpan.textContent = email;
+                step1.style.display = 'none';
+                step2.style.display = 'block';
+                codeInput.focus();
+                setStatus('✅ Patikrinkite el. paštą!', 'ok');
+            } catch (e) {
+                console.error('Send error:', e);
+                setStatus('❌ ' + (e.body?.message || e.message), 'error');
+                alert('Klaida: ' + (e.body?.message || e.message));
+            }
+            
+            this.disabled = false;
+            this.textContent = '📧 Gauti prisijungimo kodą';
+        });
+        
+        // Verify Code
+        document.getElementById('btnVerify').addEventListener('click', async function() {
+            const code = codeInput.value.trim();
+            if (!code || code.length !== 6) return alert('Įveskite 6 skaitmenų kodą!');
+            
+            this.disabled = true;
+            this.textContent = '⏳ Tikrinama...';
+            setStatus('🔍 Tikriname...', 'loading');
+            
+            try {
+                await db.auth.signInWithMagicCode({ email: userEmail, code });
                 setStatus('✅ Prisijungta!', 'ok');
-                localStorage.setItem('currentUser', email);
+                localStorage.setItem('currentUser', userEmail);
                 window.location.href = '/dashboard';
             } catch (e) {
-                console.error('Login error:', e);
-                const msg = e.body?.message || e.message || 'Neteisingi prisijungimo duomenys';
-                setStatus('❌ ' + msg, 'error');
-                alert('Klaida: ' + msg);
+                console.error('Verify error:', e);
+                setStatus('❌ Blogas kodas', 'error');
+                alert('Blogas kodas! Bandykite dar kartą.');
                 this.disabled = false;
                 this.textContent = '🔐 Prisijungti';
             }
         });
         
-        // REGISTER
-        document.getElementById('btnRegister').addEventListener('click', async function() {
-            const email = document.getElementById('regEmail').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const password2 = document.getElementById('regPassword2').value;
-            
-            if (!email || !password) {
-                return alert('Įveskite el. paštą ir slaptažodį!');
-            }
-            
-            if (password.length < 6) {
-                return alert('Slaptažodis turi būti bent 6 simbolių!');
-            }
-            
-            if (password !== password2) {
-                return alert('Slaptažodžiai nesutampa!');
-            }
-            
-            this.disabled = true;
-            this.textContent = '⏳ Registruojama...';
-            setStatus('🔄 Kuriama paskyra...', 'loading');
-            
-            try {
-                await db.auth.signUp({ email, password });
-                setStatus('✅ Paskyra sukurta!', 'ok');
-                localStorage.setItem('currentUser', email);
-                window.location.href = '/dashboard';
-            } catch (e) {
-                console.error('Register error:', e);
-                const msg = e.body?.message || e.message || 'Registracijos klaida';
-                setStatus('❌ ' + msg, 'error');
-                alert('Klaida: ' + msg);
-                this.disabled = false;
-                this.textContent = '✅ Registruotis';
-            }
+        // Back button
+        document.getElementById('btnBack').addEventListener('click', function() {
+            step2.style.display = 'none';
+            step1.style.display = 'block';
+            codeInput.value = '';
+            setStatus('✅ Įveskite el. paštą', 'ok');
         });
         
-        // Enter key handlers
-        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('btnLogin').click();
-        });
-        document.getElementById('regPassword2').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('btnRegister').click();
-        });
+        // Enter key
+        emailInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('btnSend').click(); });
+        codeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('btnVerify').click(); });
+        codeInput.addEventListener('input', function() { this.value = this.value.replace(/\D/g, '').slice(0, 6); });
         
     } catch (err) {
-        setStatus('❌ KLAIDA: ' + err.message, 'error');
+        setStatus('❌ ' + err.message, 'error');
         console.error('FATAL:', err);
     }
 })();
