@@ -12,8 +12,6 @@
         .status-loading { background: #fff3cd; color: #856404; }
         .status-ok { background: #d4edda; color: #155724; }
         .status-error { background: #f8d7da; color: #721c24; }
-        .toggle-link { cursor: pointer; color: #667eea; text-decoration: underline; }
-        .toggle-link:hover { color: #764ba2; }
     </style>
 </head>
 <body>
@@ -31,10 +29,11 @@
                 <label class="form-label">Slaptažodis</label>
                 <input type="password" id="loginPassword" class="form-control" placeholder="••••••••">
             </div>
-            <button id="btnLogin" class="btn btn-primary w-100 mb-3">🔐 Prisijungti</button>
-            <p class="text-center mb-0">
-                Neturite paskyros? <span class="toggle-link" id="showRegister">Registruotis</span>
-            </p>
+            <button type="button" id="btnLogin" class="btn btn-primary w-100 mb-3">🔐 Prisijungti</button>
+            <div class="text-center">
+                <span>Neturite paskyros? </span>
+                <button type="button" id="showRegister" class="btn btn-link p-0">Registruotis</button>
+            </div>
         </div>
         
         <!-- REGISTER FORM -->
@@ -52,10 +51,11 @@
                 <label class="form-label">Pakartokite slaptažodį</label>
                 <input type="password" id="regPassword2" class="form-control" placeholder="••••••••">
             </div>
-            <button id="btnRegister" class="btn btn-success w-100 mb-3">✅ Registruotis</button>
-            <p class="text-center mb-0">
-                Jau turite paskyrą? <span class="toggle-link" id="showLogin">Prisijungti</span>
-            </p>
+            <button type="button" id="btnRegister" class="btn btn-success w-100 mb-3">✅ Registruotis</button>
+            <div class="text-center">
+                <span>Jau turite paskyrą? </span>
+                <button type="button" id="showLogin" class="btn btn-link p-0">Prisijungti</button>
+            </div>
         </div>
         
         <div id="status" class="status-loading">⏳ Kraunama...</div>
@@ -65,8 +65,10 @@
 // Status helper
 function setStatus(msg, type) {
     const el = document.getElementById('status');
-    el.textContent = msg;
-    el.className = 'status-' + type;
+    if (el) {
+        el.textContent = msg;
+        el.className = 'status-' + type;
+    }
 }
 
 // Main
@@ -91,26 +93,23 @@ function setStatus(msg, type) {
         // DOM elements
         const loginForm = document.getElementById('loginForm');
         const registerForm = document.getElementById('registerForm');
-        const showRegister = document.getElementById('showRegister');
-        const showLogin = document.getElementById('showLogin');
-        const btnLogin = document.getElementById('btnLogin');
-        const btnRegister = document.getElementById('btnRegister');
         
-        // Toggle forms
-        showRegister.onclick = () => {
+        // Toggle to Register
+        document.getElementById('showRegister').addEventListener('click', function() {
             loginForm.style.display = 'none';
             registerForm.style.display = 'block';
-            setStatus('✅ Užpildykite registracijos formą', 'ok');
-        };
+            setStatus('📝 Užpildykite registracijos formą', 'ok');
+        });
         
-        showLogin.onclick = () => {
+        // Toggle to Login
+        document.getElementById('showLogin').addEventListener('click', function() {
             registerForm.style.display = 'none';
             loginForm.style.display = 'block';
             setStatus('✅ Paruošta!', 'ok');
-        };
+        });
         
         // LOGIN
-        btnLogin.onclick = async () => {
+        document.getElementById('btnLogin').addEventListener('click', async function() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value;
             
@@ -118,8 +117,8 @@ function setStatus(msg, type) {
                 return alert('Įveskite el. paštą ir slaptažodį!');
             }
             
-            btnLogin.disabled = true;
-            btnLogin.textContent = '⏳ Jungiamasi...';
+            this.disabled = true;
+            this.textContent = '⏳ Jungiamasi...';
             setStatus('🔄 Tikrinama...', 'loading');
             
             try {
@@ -132,13 +131,13 @@ function setStatus(msg, type) {
                 const msg = e.body?.message || e.message || 'Neteisingi prisijungimo duomenys';
                 setStatus('❌ ' + msg, 'error');
                 alert('Klaida: ' + msg);
-                btnLogin.disabled = false;
-                btnLogin.textContent = '🔐 Prisijungti';
+                this.disabled = false;
+                this.textContent = '🔐 Prisijungti';
             }
-        };
+        });
         
         // REGISTER
-        btnRegister.onclick = async () => {
+        document.getElementById('btnRegister').addEventListener('click', async function() {
             const email = document.getElementById('regEmail').value.trim();
             const password = document.getElementById('regPassword').value;
             const password2 = document.getElementById('regPassword2').value;
@@ -155,13 +154,13 @@ function setStatus(msg, type) {
                 return alert('Slaptažodžiai nesutampa!');
             }
             
-            btnRegister.disabled = true;
-            btnRegister.textContent = '⏳ Registruojama...';
+            this.disabled = true;
+            this.textContent = '⏳ Registruojama...';
             setStatus('🔄 Kuriama paskyra...', 'loading');
             
             try {
                 await db.auth.signUp({ email, password });
-                setStatus('✅ Paskyra sukurta! Prisijungiama...', 'ok');
+                setStatus('✅ Paskyra sukurta!', 'ok');
                 localStorage.setItem('currentUser', email);
                 window.location.href = '/dashboard';
             } catch (e) {
@@ -169,18 +168,18 @@ function setStatus(msg, type) {
                 const msg = e.body?.message || e.message || 'Registracijos klaida';
                 setStatus('❌ ' + msg, 'error');
                 alert('Klaida: ' + msg);
-                btnRegister.disabled = false;
-                btnRegister.textContent = '✅ Registruotis';
+                this.disabled = false;
+                this.textContent = '✅ Registruotis';
             }
-        };
+        });
         
         // Enter key handlers
-        document.getElementById('loginPassword').onkeypress = (e) => {
-            if (e.key === 'Enter') btnLogin.click();
-        };
-        document.getElementById('regPassword2').onkeypress = (e) => {
-            if (e.key === 'Enter') btnRegister.click();
-        };
+        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('btnLogin').click();
+        });
+        document.getElementById('regPassword2').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('btnRegister').click();
+        });
         
     } catch (err) {
         setStatus('❌ KLAIDA: ' + err.message, 'error');
