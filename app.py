@@ -7,14 +7,28 @@ This is a serverless function optimized for Vercel deployment.
 - Minimal routes for AI receipt scanning
 """
 
+import os
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
-import os
 import base64
 import traceback
 import json
 import re
 import io
+
+# Base directory for absolute paths (templates, static, .env)
+base_dir = os.path.abspath(os.path.dirname(__file__))
+
+# Load environment variables first (CRITICAL: must be before any os.environ access)
+# Safe dotenv import for Vercel compatibility
+try:
+    from dotenv import load_dotenv
+    # Load .env locally using an absolute path
+    load_dotenv(os.path.join(base_dir, '.env'))
+except ImportError:
+    # If python-dotenv is not installed (e.g. on Vercel), just skip it.
+    # Vercel uses System Environment Variables anyway.
+    pass
 
 # Optional imports with fallbacks
 try:
@@ -31,24 +45,18 @@ except ImportError:
     ImageEnhance = None
     ImageFilter = None
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app with explicit template/static folders (absolute paths)
+app = Flask(
+    __name__,
+    template_folder=os.path.join(base_dir, 'templates'),
+    static_folder=os.path.join(base_dir, 'static'),
+)
 
 # Secret key for flash messages
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Initialize OpenAI client from environment variable
-openai_api_key = os.environ.get('OPENAI_API_KEY')
-if not openai_api_key:
-    print("⚠️ WARNING: OPENAI_API_KEY environment variable not set")
-    app.openai_client = None
-else:
-    try:
-        app.openai_client = OpenAI(api_key=openai_api_key)
-        print("✅ OpenAI client initialized successfully")
-    except Exception as e:
-        print(f"⚠️ Warning: Could not initialize OpenAI client: {e}")
-        app.openai_client = None
+# Lazy-initialized OpenAI client (set inside route to avoid startup crashes)
+client = None
 
 
 @app.route('/')
@@ -82,7 +90,7 @@ def scan_receipt():
     """
     # Define valid categories - MUST match frontend dropdown options exactly
     VALID_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Paslaugos", "Kiti"]
-    
+
     try:
         print("--- STARTING SCAN ---")
         
@@ -163,14 +171,18 @@ def scan_receipt():
             base64_image = base64.b64encode(file_bytes).decode('utf-8')
             mime_type = f'image/{file_ext}' if file_ext != 'jpg' else 'image/jpeg'
         
-        # Get OpenAI client
-        if not app.openai_client:
+        # Get / lazy-init OpenAI client in a crash-proof way
+        global client
+        if client is None:
             api_key = os.environ.get('OPENAI_API_KEY')
             if not api_key:
-                return jsonify({"error": "OpenAI API key not configured"}), 400
-            client = OpenAI(api_key=api_key)
-        else:
-            client = app.openai_client
+                return jsonify({"error": "OpenAI API key not configured"}), 500
+            try:
+                client = OpenAI(api_key=api_key)
+            except Exception as e:
+                # If client initialization fails, surface the real error
+                print(f"OpenAI client initialization error: {e}")
+                return jsonify({"error": f"Failed to initialize OpenAI client: {str(e)}"}), 500
         
         # STEP 3: Build system prompt for receipt digitization
         STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Paslaugos", "Kiti"]
