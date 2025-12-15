@@ -19,7 +19,7 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
             padding: 40px;
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
         }
         .login-card h1 {
             font-size: 24px;
@@ -52,6 +52,67 @@
         .btn-login:hover {
             background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
         }
+        .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .message-area {
+            margin-bottom: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        .message-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .code-input {
+            font-size: 24px;
+            letter-spacing: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .step {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+        .step-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .step-inactive {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 15px;
+            color: #667eea;
+            cursor: pointer;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -59,49 +120,203 @@
         <div class="brand">🚀</div>
         <h1>Prisijungti prie Sistemos</h1>
         <p class="subtitle">Mano Startuolis Apskaita</p>
-        
-        <form id="login-form">
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step step-active" id="step-indicator-1">1</div>
+            <div class="step step-inactive" id="step-indicator-2">2</div>
+        </div>
+
+        <!-- Message Area -->
+        <div class="message-area" id="message-area"></div>
+
+        <!-- Step 1: Email Input -->
+        <div id="step-1">
             <div class="mb-4">
-                <label for="username" class="form-label">Vartotojo vardas</label>
-                <input type="text" 
+                <label for="email" class="form-label">El. pašto adresas</label>
+                <input type="email" 
                        class="form-control form-control-lg" 
-                       id="username" 
-                       name="username" 
-                       placeholder="Įveskite savo vardą"
+                       id="email" 
+                       name="email" 
+                       placeholder="jusu@email.com"
                        required
                        autofocus>
             </div>
-            <button type="submit" class="btn btn-primary btn-login w-100">
-                Prisijungti
+            <button type="button" class="btn btn-primary btn-login w-100" id="send-code-btn" onclick="sendCode()">
+                📧 Gauti kodą
             </button>
-        </form>
+        </div>
+
+        <!-- Step 2: Code Input (Hidden by default) -->
+        <div id="step-2" style="display: none;">
+            <div class="mb-4">
+                <label for="code" class="form-label">6 skaitmenų kodas</label>
+                <input type="text" 
+                       class="form-control form-control-lg code-input" 
+                       id="code" 
+                       name="code" 
+                       placeholder="000000"
+                       maxlength="6"
+                       pattern="[0-9]{6}"
+                       inputmode="numeric"
+                       required>
+                <small class="form-text text-muted text-center d-block mt-2">
+                    Patikrinkite savo el. paštą
+                </small>
+            </div>
+            <button type="button" class="btn btn-primary btn-login w-100" id="verify-code-btn" onclick="verifyCode()">
+                🔐 Prisijungti
+            </button>
+            <span class="back-link" onclick="goBackToEmail()">← Grįžti ir pakeisti el. paštą</span>
+        </div>
     </div>
 
-    <script>
-        // Check if already logged in
-        const existingUser = localStorage.getItem('currentUser');
-        if (existingUser) {
-            window.location.href = '/dashboard';
+    <!-- InstantDB Integration -->
+    <script type="module">
+        import { init } from 'https://js.instantdb.com/v0.14.3/api.js';
+
+        // Same APP_ID as in expenses.html
+        const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
+
+        let db;
+        let userEmail = '';
+
+        try {
+            db = init({ appId: APP_ID });
+            console.log("✅ InstantDB connected for auth");
+
+            // Check if already authenticated
+            db.subscribeAuth((auth) => {
+                if (auth.user) {
+                    console.log("User already logged in:", auth.user.email);
+                    localStorage.setItem('currentUser', auth.user.email);
+                    window.location.href = '/dashboard';
+                }
+            });
+        } catch (e) {
+            console.error("InstantDB connection error:", e);
+            showMessage("Nepavyko prisijungti prie sistemos. Bandykite vėliau.", "error");
         }
 
-        // Handle login form submission
-        document.getElementById('login-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const username = document.getElementById('username').value.trim();
-            
-            if (!username) {
-                alert('Prašome įvesti vartotojo vardą.');
+        // Expose functions globally
+        window.sendCode = async function() {
+            const emailInput = document.getElementById('email');
+            const email = emailInput.value.trim();
+
+            if (!email) {
+                showMessage("Prašome įvesti el. pašto adresą.", "error");
                 return;
             }
-            
-            // Save username to localStorage
-            localStorage.setItem('currentUser', username);
-            
-            // Redirect to dashboard
-            window.location.href = '/dashboard';
+
+            if (!isValidEmail(email)) {
+                showMessage("Neteisingas el. pašto formatas.", "error");
+                return;
+            }
+
+            userEmail = email;
+            const btn = document.getElementById('send-code-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Siunčiama...';
+
+            try {
+                await db.auth.sendMagicCode({ email: email });
+                
+                // Success: Show Step 2
+                document.getElementById('step-1').style.display = 'none';
+                document.getElementById('step-2').style.display = 'block';
+                document.getElementById('step-indicator-1').classList.remove('step-active');
+                document.getElementById('step-indicator-1').classList.add('step-inactive');
+                document.getElementById('step-indicator-2').classList.remove('step-inactive');
+                document.getElementById('step-indicator-2').classList.add('step-active');
+                
+                showMessage("✅ Kodas išsiųstas į " + email, "success");
+                
+                // Focus on code input
+                document.getElementById('code').focus();
+            } catch (error) {
+                console.error("Send code error:", error);
+                showMessage("Nepavyko išsiųsti kodo: " + (error.message || "Bandykite vėliau"), "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '📧 Gauti kodą';
+            }
+        };
+
+        window.verifyCode = async function() {
+            const codeInput = document.getElementById('code');
+            const code = codeInput.value.trim();
+
+            if (!code || code.length !== 6) {
+                showMessage("Prašome įvesti 6 skaitmenų kodą.", "error");
+                return;
+            }
+
+            const btn = document.getElementById('verify-code-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Tikrinama...';
+
+            try {
+                await db.auth.signInWithMagicCode({ email: userEmail, code: code });
+                
+                // Success: Save user and redirect
+                localStorage.setItem('currentUser', userEmail);
+                showMessage("✅ Prisijungta sėkmingai! Nukreipiama...", "success");
+                
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
+            } catch (error) {
+                console.error("Verify code error:", error);
+                showMessage("❌ Blogas kodas. Bandykite dar kartą.", "error");
+                btn.disabled = false;
+                btn.innerHTML = '🔐 Prisijungti';
+            }
+        };
+
+        window.goBackToEmail = function() {
+            document.getElementById('step-1').style.display = 'block';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-indicator-1').classList.add('step-active');
+            document.getElementById('step-indicator-1').classList.remove('step-inactive');
+            document.getElementById('step-indicator-2').classList.add('step-inactive');
+            document.getElementById('step-indicator-2').classList.remove('step-active');
+            document.getElementById('code').value = '';
+            hideMessage();
+        };
+
+        function showMessage(text, type) {
+            const msgArea = document.getElementById('message-area');
+            msgArea.textContent = text;
+            msgArea.className = 'message-area';
+            msgArea.classList.add(type === 'success' ? 'message-success' : 'message-error');
+            msgArea.style.display = 'block';
+        }
+
+        function hideMessage() {
+            document.getElementById('message-area').style.display = 'none';
+        }
+
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('email').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                window.sendCode();
+            }
+        });
+
+        document.getElementById('code').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                window.verifyCode();
+            }
+        });
+
+        // Auto-format code input (numbers only)
+        document.getElementById('code').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
         });
     </script>
 </body>
 </html>
-

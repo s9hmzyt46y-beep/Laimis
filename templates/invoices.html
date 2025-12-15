@@ -4,12 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sąskaitos - Mano Startuolis</title>
-    <!-- Auth Check: Redirect to login if not authenticated -->
-    <script>
-        if (!localStorage.getItem('currentUser')) {
-            window.location.href = '/';
-        }
-    </script>
+    <!-- Auth is handled by InstantDB subscribeAuth in the module script below -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -34,20 +29,14 @@
                 </ul>
                 <div class="d-flex align-items-center">
                     <span class="text-muted me-3" id="navbar-user"></span>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="localStorage.removeItem('currentUser'); window.location.href='/';">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="window.signOut ? window.signOut() : (localStorage.removeItem('currentUser'), window.location.href='/');">
                         🚪 Atsijungti
                     </button>
                 </div>
             </div>
         </div>
     </nav>
-    <script>
-        // Display current user in navbar
-        const navUser = document.getElementById('navbar-user');
-        if (navUser && localStorage.getItem('currentUser')) {
-            navUser.textContent = '👤 ' + localStorage.getItem('currentUser');
-        }
-    </script>
+    <!-- User display is handled by InstantDB subscribeAuth below -->
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -272,7 +261,7 @@
         document.getElementById('generate-pdf-btn').addEventListener('click', generatePDF);
     </script>
 
-    <!-- InstantDB integration (invoices + clients for dropdown) -->
+    <!-- InstantDB integration with User Data Isolation -->
     <script type="module">
       import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
 
@@ -289,11 +278,35 @@
           console.error("Klaida jungiantis prie InstantDB (invoices):", e);
       }
 
-      // Subscribe to clients to populate dropdown
+      // Auth check and data loading
       if (db) {
-          db.subscribeQuery({ clients: {} }, (resp) => {
+          db.subscribeAuth((auth) => {
+              if (!auth.user) {
+                  console.log("Not authenticated, redirecting to login");
+                  window.location.href = '/';
+              } else {
+                  window.currentUser = auth.user;
+                  console.log("✅ Authenticated as:", auth.user.email);
+                  
+                  // Update navbar with user email
+                  const navUser = document.getElementById('navbar-user');
+                  if (navUser) navUser.textContent = '👤 ' + auth.user.email;
+                  
+                  // Load clients filtered by userId (for dropdown)
+                  loadClientsForInvoices(auth.user.id);
+              }
+          });
+      }
+
+      // Load clients filtered by userId
+      function loadClientsForInvoices(userId) {
+          db.subscribeQuery({ 
+              clients: { 
+                  $: { where: { userId: userId } } 
+              } 
+          }, (resp) => {
               if (resp.error) {
-                  console.error("Klaida gaunant klientus sąskaitoms:", resp.error);
+                  console.error("Klaida gaunant klientus:", resp.error);
                   return;
               }
               const clients = resp.data.clients || [];
@@ -302,8 +315,7 @@
               const select = document.getElementById('clientSelect');
               if (!select) return;
 
-              // Reset options
-              select.innerHTML = '<option value=\"\">--- Pasirinkti klientą ---</option>';
+              select.innerHTML = '<option value="">--- Pasirinkti klientą ---</option>';
 
               clients.forEach(c => {
                   const opt = document.createElement('option');
@@ -324,7 +336,7 @@
                       const form = document.getElementById('invoice-form');
                       if (!form || !client) return;
 
-                      const clientNameInput = form.querySelector('[name=\"client_name\"]');
+                      const clientNameInput = form.querySelector('[name="client_name"]');
                       if (clientNameInput) {
                           clientNameInput.value = client.name || '';
                       }
@@ -333,6 +345,19 @@
               }
           });
       }
+
+      // Sign out function
+      window.signOut = function() {
+          if (window.db && window.db.auth) {
+              window.db.auth.signOut().then(() => {
+                  localStorage.removeItem('currentUser');
+                  window.location.href = '/';
+              });
+          } else {
+              localStorage.removeItem('currentUser');
+              window.location.href = '/';
+          }
+      };
     </script>
 </body>
 </html>

@@ -4,12 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Klientai - Mano Startuolis</title>
-    <!-- Auth Check: Redirect to login if not authenticated -->
-    <script>
-        if (!localStorage.getItem('currentUser')) {
-            window.location.href = '/';
-        }
-    </script>
+    <!-- Auth is handled by InstantDB subscribeAuth in the module script below -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -34,20 +29,14 @@
                 </ul>
                 <div class="d-flex align-items-center">
                     <span class="text-muted me-3" id="navbar-user"></span>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="localStorage.removeItem('currentUser'); window.location.href='/';">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="window.signOut ? window.signOut() : (localStorage.removeItem('currentUser'), window.location.href='/');">
                         🚪 Atsijungti
                     </button>
                 </div>
             </div>
         </div>
     </nav>
-    <script>
-        // Display current user in navbar
-        const navUser = document.getElementById('navbar-user');
-        if (navUser && localStorage.getItem('currentUser')) {
-            navUser.textContent = '👤 ' + localStorage.getItem('currentUser');
-        }
-    </script>
+    <!-- User display is handled by InstantDB subscribeAuth below -->
 
     <div class="container mt-4">
         <div class="row">
@@ -180,10 +169,10 @@
             });
         };
 
-        // Save client to InstantDB
+        // Save client to InstantDB with userId
         window.saveClient = async function() {
-            if (!window.db || !window.tx || !window.id) {
-                alert('Duomenų bazė neparuošta (InstantDB). Perkraukite puslapį.');
+            if (!window.db || !window.tx || !window.id || !window.currentUser) {
+                alert('Duomenų bazė neparuošta arba nesate prisijungęs.');
                 return;
             }
             const data = getClientFormData();
@@ -197,6 +186,7 @@
                 await window.db.transact([
                     window.tx.clients[newId].update({
                         id: newId,
+                        userId: window.currentUser.id,  // USER DATA ISOLATION
                         name: data.name,
                         code: data.code || '',
                         vat_code: data.vat_code || '',
@@ -234,11 +224,10 @@
         saveClientBtn.addEventListener('click', window.saveClient);
     </script>
 
-    <!-- InstantDB integration -->
+    <!-- InstantDB integration with User Data Isolation -->
     <script type="module">
         import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
 
-        // Same APP_ID as expenses.html
         const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
 
         let db;
@@ -250,23 +239,58 @@
             console.log("✅ InstantDB (clients) connected");
         } catch (e) {
             console.error("InstantDB connection error:", e);
-            alert("Nepavyko prisijungti prie duomenų bazės.");
         }
 
-        // Subscribe to clients collection
+        // Auth check and data loading
         if (db) {
-            db.subscribeQuery({ clients: {} }, (resp) => {
+            db.subscribeAuth((auth) => {
+                if (!auth.user) {
+                    console.log("Not authenticated, redirecting to login");
+                    window.location.href = '/';
+                } else {
+                    window.currentUser = auth.user;
+                    console.log("✅ Authenticated as:", auth.user.email);
+                    
+                    // Update navbar with user email
+                    const navUser = document.getElementById('navbar-user');
+                    if (navUser) navUser.textContent = '👤 ' + auth.user.email;
+                    
+                    // Load data filtered by userId
+                    loadClientsData(auth.user.id);
+                }
+            });
+        }
+
+        // Load clients filtered by userId
+        function loadClientsData(userId) {
+            db.subscribeQuery({ 
+                clients: { 
+                    $: { where: { userId: userId } } 
+                } 
+            }, (resp) => {
                 if (resp.error) {
                     console.error('Error fetching clients:', resp.error);
                     return;
                 }
                 const clients = resp.data.clients || [];
-                // Call the global render function
                 if (typeof window.renderClients === 'function') {
                     window.renderClients(clients);
                 }
             });
         }
+
+        // Sign out function
+        window.signOut = function() {
+            if (window.db && window.db.auth) {
+                window.db.auth.signOut().then(() => {
+                    localStorage.removeItem('currentUser');
+                    window.location.href = '/';
+                });
+            } else {
+                localStorage.removeItem('currentUser');
+                window.location.href = '/';
+            }
+        };
     </script>
 </body>
 </html>

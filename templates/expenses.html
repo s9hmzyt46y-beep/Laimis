@@ -4,12 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Išlaidos - Mano Startuolis</title>
-    <!-- Auth Check: Redirect to login if not authenticated -->
-    <script>
-        if (!localStorage.getItem('currentUser')) {
-            window.location.href = '/';
-        }
-    </script>
+    <!-- Auth is handled by InstantDB subscribeAuth in the module script below -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .category-dot {
@@ -67,20 +62,14 @@
                 </ul>
                 <div class="d-flex align-items-center">
                     <span class="text-muted me-3" id="navbar-user"></span>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="localStorage.removeItem('currentUser'); window.location.href='/';">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="window.signOut ? window.signOut() : (localStorage.removeItem('currentUser'), window.location.href='/');">
                         🚪 Atsijungti
                     </button>
                 </div>
             </div>
         </div>
     </nav>
-    <script>
-        // Display current user in navbar
-        const navUser = document.getElementById('navbar-user');
-        if (navUser && localStorage.getItem('currentUser')) {
-            navUser.textContent = '👤 ' + localStorage.getItem('currentUser');
-        }
-    </script>
+    <!-- User display is handled by InstantDB subscribeAuth below -->
 
     <div class="container mt-4">
         <!-- Header -->
@@ -918,14 +907,13 @@
         });
     </script>
 
-    <!-- InstantDB integration -->
+    <!-- InstantDB integration with User Data Isolation -->
     <script type="module">
       import { init, tx, id } from 'https://js.instantdb.com/v0.14.3/api.js';
 
-      // ⚠️ ČIA ĮKLIJUOKITE SAVO ID ⚠️
       const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb'; 
 
-      // 1. Prisijungimas
+      // 1. Initialize DB
       let db;
       try {
           db = init({ appId: APP_ID });
@@ -934,18 +922,46 @@
           window.id = id;
           console.log("✅ DB Prisijungta");
       } catch (e) {
-          alert("Klaida jungiantis prie DB: " + e.message);
+          console.error("Klaida jungiantis prie DB:", e);
       }
 
-      // 2. Duomenų klausymas (kad rodytų sąrašą apačioje)
+      // 2. Auth check and data loading
       if (db) {
-          db.subscribeQuery({ expenses: {} }, (resp) => {
-              if (resp.error) return;
+          db.subscribeAuth((auth) => {
+              if (!auth.user) {
+                  console.log("Not authenticated, redirecting to login");
+                  window.location.href = '/';
+              } else {
+                  // Save user globally
+                  window.currentUser = auth.user;
+                  console.log("✅ Authenticated as:", auth.user.email);
+                  
+                  // Update navbar with user email
+                  const navUser = document.getElementById('navbar-user');
+                  if (navUser) navUser.textContent = '👤 ' + auth.user.email;
+                  
+                  // Load data filtered by userId
+                  loadExpensesData(auth.user.id);
+              }
+          });
+      }
+
+      // 3. Load expenses filtered by userId
+      function loadExpensesData(userId) {
+          db.subscribeQuery({ 
+              expenses: { 
+                  $: { where: { userId: userId } } 
+              } 
+          }, (resp) => {
+              if (resp.error) {
+                  console.error("Error loading expenses:", resp.error);
+                  return;
+              }
               renderMainTable(resp.data.expenses);
           });
       }
 
-      // 3. Pagrindinės lentelės piešimas
+      // 4. Render expenses table
       function renderMainTable(expenses) {
           const tbody = document.getElementById('expenses-list');
           if (!tbody) return;
@@ -958,9 +974,9 @@
               total += (parseFloat(exp.amount) || 0);
               const row = document.createElement('tr');
               row.innerHTML = `
-                  <td>${exp.date}</td>
-                  <td>${exp.vendor}</td>
-                  <td>${exp.category}</td>
+                  <td>${exp.date || '-'}</td>
+                  <td>${exp.vendor || '-'}</td>
+                  <td>${exp.category || '-'}</td>
                   <td>${parseFloat(exp.net || 0).toFixed(2)}</td>
                   <td>${parseFloat(exp.vat || 0).toFixed(2)}</td>
                   <td><strong>${parseFloat(exp.amount || 0).toFixed(2)}</strong></td>
@@ -973,19 +989,15 @@
           if (totalEl) totalEl.innerText = total.toFixed(2);
       }
 
-      // 4. IŠSAUGOJIMO FUNKCIJA (Svarbiausia dalis)
+      // 5. Save function with userId
       window.saveAllToInstantDB = function() {
-          // 1 Testas: Ar funkcija pasileidžia?
-          alert("1. Pradedamas saugojimas...");
-
-          if (!window.db) {
-              alert("KLAIDA: Nėra ryšio su duomenų baze!");
+          if (!window.db || !window.currentUser) {
+              alert("KLAIDA: Nėra ryšio su duomenų baze arba nesate prisijungęs!");
               return;
           }
 
           const rows = document.querySelectorAll('#staging-table tbody tr');
-          alert("2. Rasta eilučių lentelėje: " + rows.length);
-
+          
           if (rows.length === 0) {
               alert("Lentelė tuščia, nėra ką saugoti.");
               return;
@@ -993,29 +1005,27 @@
 
           const txs = [];
           let errors = [];
+          const userId = window.currentUser.id;
 
           rows.forEach((row, index) => {
               try {
-                  // Bandome surasti laukelius
                   const dateEl = row.querySelector('[name="date"]');
                   const vendorEl = row.querySelector('[name="vendor"]');
                   const categoryEl = row.querySelector('[name="category"]');
-                  const amountEl = row.querySelector('[name="amount"]'); // Bendra suma
-                  const netEl = row.querySelector('[name="net_amount"]'); // Be PVM
-                  const vatEl = row.querySelector('[name="vat_amount"]'); // PVM
+                  const amountEl = row.querySelector('[name="amount"]');
+                  const netEl = row.querySelector('[name="net_amount"]');
+                  const vatEl = row.querySelector('[name="vat_amount"]');
 
-                  // Jei kurio nors laukelio nėra, pranešame
                   if (!dateEl || !vendorEl || !amountEl) {
-                      throw new Error(`Eilutėje ${index+1} trūksta pagrindinių laukelių (date, vendor arba amount)`);
+                      throw new Error(`Eilutėje ${index+1} trūksta pagrindinių laukelių`);
                   }
 
                   const newId = window.id();
-                  
-                  // Išsaugome failo nuorodą, jei ji yra
                   const fileLink = row.querySelector('a'); 
                   const fileUrl = fileLink ? fileLink.href : null;
 
                   txs.push(window.tx.expenses[newId].update({
+                      userId: userId,  // USER DATA ISOLATION
                       date: dateEl.value,
                       vendor: vendorEl.value,
                       category: categoryEl.value,
@@ -1036,18 +1046,29 @@
               return;
           }
 
-          alert("3. Paruošta siuntimui. Siunčiama į DB...");
-
           window.db.transact(txs)
               .then(() => {
-                  alert("✅ SĖKMĖ! Duomenys išsaugoti.");
-                  document.querySelector('#staging-table tbody').innerHTML = ''; // Išvalom
-                  document.getElementById('staging-table').style.display = 'none'; // Paslepiam
+                  alert("✅ Duomenys išsaugoti!");
+                  document.querySelector('#staging-table tbody').innerHTML = '';
+                  document.getElementById('staging-section').style.display = 'none';
               })
               .catch(err => {
-                  alert("❌ KLAIDA SAUGANT Į DB: " + err.message);
+                  alert("❌ KLAIDA SAUGANT: " + err.message);
                   console.error(err);
               });
+      };
+
+      // 6. Sign out function
+      window.signOut = function() {
+          if (window.db && window.db.auth) {
+              window.db.auth.signOut().then(() => {
+                  localStorage.removeItem('currentUser');
+                  window.location.href = '/';
+              });
+          } else {
+              localStorage.removeItem('currentUser');
+              window.location.href = '/';
+          }
       };
     </script>
 </body>

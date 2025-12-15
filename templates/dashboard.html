@@ -4,12 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Valdymo Panelė - Mano Startuolis</title>
-    <!-- Auth Check: Redirect to login if not authenticated -->
-    <script>
-        if (!localStorage.getItem('currentUser')) {
-            window.location.href = '/';
-        }
-    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -91,16 +85,38 @@
             color: #999;
             font-size: 14px;
         }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading overlay (shown until auth is verified) -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Kraunama...</span>
+            </div>
+            <p class="text-muted">Tikrinama prisijungimo būsena...</p>
+        </div>
+    </div>
+
     <!-- Header -->
     <div class="dashboard-header">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h1>Sveiki, <span id="user-name">Vartotojau</span>! 👋</h1>
-                    <p class="subtitle">Valdymo panelė - pasirinkite, ką norite daryti</p>
+                    <p class="subtitle" id="user-email"></p>
                 </div>
                 <button type="button" class="btn btn-logout" id="logout-btn">
                     🚪 Atsijungti
@@ -158,19 +174,73 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        // Display username (auth check is in <head>)
-        const currentUser = localStorage.getItem('currentUser');
-        if (currentUser) {
-            document.getElementById('user-name').textContent = currentUser;
+    <!-- InstantDB integration for Auth -->
+    <script type="module">
+        import { init } from 'https://js.instantdb.com/v0.14.3/api.js';
+
+        const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
+
+        let db;
+        try {
+            db = init({ appId: APP_ID });
+            window.db = db;
+            console.log("✅ InstantDB (dashboard) connected");
+        } catch (e) {
+            console.error("InstantDB connection error:", e);
         }
 
-        // Handle logout
-        document.getElementById('logout-btn').addEventListener('click', function() {
-            localStorage.removeItem('currentUser');
+        // Auth check
+        if (db) {
+            db.subscribeAuth((auth) => {
+                // Hide loading overlay
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+                if (!auth.user) {
+                    console.log("Not authenticated, redirecting to login");
+                    window.location.href = '/';
+                } else {
+                    window.currentUser = auth.user;
+                    console.log("✅ Authenticated as:", auth.user.email);
+                    
+                    // Display user info
+                    const userNameEl = document.getElementById('user-name');
+                    const userEmailEl = document.getElementById('user-email');
+                    
+                    // Extract name from email (before @) or use full email
+                    const emailParts = auth.user.email.split('@');
+                    const displayName = emailParts[0].charAt(0).toUpperCase() + emailParts[0].slice(1);
+                    
+                    if (userNameEl) userNameEl.textContent = displayName;
+                    if (userEmailEl) userEmailEl.textContent = auth.user.email;
+                    
+                    // Also save to localStorage for backward compatibility
+                    localStorage.setItem('currentUser', auth.user.email);
+                }
+            });
+        } else {
+            // Fallback: hide loading and redirect if DB failed
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
             window.location.href = '/';
+        }
+
+        // Handle logout with InstantDB signOut
+        document.getElementById('logout-btn').addEventListener('click', function() {
+            if (window.db && window.db.auth) {
+                window.db.auth.signOut().then(() => {
+                    localStorage.removeItem('currentUser');
+                    window.location.href = '/';
+                }).catch(err => {
+                    console.error("Sign out error:", err);
+                    localStorage.removeItem('currentUser');
+                    window.location.href = '/';
+                });
+            } else {
+                localStorage.removeItem('currentUser');
+                window.location.href = '/';
+            }
         });
     </script>
 </body>
 </html>
-
