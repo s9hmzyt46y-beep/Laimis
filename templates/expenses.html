@@ -314,6 +314,65 @@
         </div>
     </div>
     
+    <!-- View Expense Modal -->
+    <div class="modal fade" id="viewExpenseModal" tabindex="-1" aria-labelledby="viewExpenseModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="viewExpenseModalLabel">📄 Išlaidos detalės</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Uždaryti"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light"><strong>Pagrindinė informacija</strong></div>
+                                <div class="card-body">
+                                    <p><strong>📅 Data:</strong> <span id="view-date">-</span></p>
+                                    <p><strong>🏪 Tiekėjas:</strong> <span id="view-vendor">-</span></p>
+                                    <p><strong>📝 Aprašymas:</strong> <span id="view-description">-</span></p>
+                                    <p><strong>🏷️ Kategorija:</strong> <span id="view-category">-</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light"><strong>Finansinė informacija</strong></div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <tr>
+                                            <td>Suma be PVM:</td>
+                                            <td class="text-end"><strong id="view-net">0.00</strong> €</td>
+                                        </tr>
+                                        <tr>
+                                            <td>PVM suma:</td>
+                                            <td class="text-end"><strong id="view-vat">0.00</strong> €</td>
+                                        </tr>
+                                        <tr class="table-success">
+                                            <td>Bendra suma:</td>
+                                            <td class="text-end"><strong id="view-amount">0.00</strong> €</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="view-file-container" style="display: none;">
+                        <hr>
+                        <h6>📎 Prisegtas failas:</h6>
+                        <div id="view-file-preview" class="text-center p-3 bg-light border rounded">
+                            <!-- File preview will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Uždaryti</button>
+                    <button type="button" class="btn btn-danger" id="modal-delete-btn">🗑️ Ištrinti</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -1007,6 +1066,7 @@
                   <td class="text-end">${vat.toFixed(2)} €</td>
                   <td class="text-end"><strong>${amount.toFixed(2)} €</strong></td>
                   <td class="text-center">
+                      <button class="btn btn-sm btn-outline-primary me-1" onclick="window.viewExpense('${exp.id}')" title="Peržiūrėti">👁️</button>
                       <button class="btn btn-sm btn-outline-danger" onclick="window.deleteExpense('${exp.id}')" title="Trinti">🗑️</button>
                   </td>
               `;
@@ -1185,6 +1245,55 @@
       
       // Store expenses globally for export
       window.allExpenses = [];
+      
+      // 8. View expense details in modal
+      window.viewExpense = function(expenseId) {
+          const expense = window.allExpenses.find(e => e.id === expenseId);
+          if (!expense) {
+              alert('Išlaida nerasta!');
+              return;
+          }
+          
+          // Populate modal fields
+          document.getElementById('view-date').textContent = expense.date || '-';
+          document.getElementById('view-vendor').textContent = expense.vendor || '-';
+          document.getElementById('view-description').textContent = expense.description || '-';
+          document.getElementById('view-category').textContent = expense.category || 'Kiti';
+          document.getElementById('view-net').textContent = (parseFloat(expense.net) || 0).toFixed(2);
+          document.getElementById('view-vat').textContent = (parseFloat(expense.vat) || 0).toFixed(2);
+          document.getElementById('view-amount').textContent = (parseFloat(expense.amount) || 0).toFixed(2);
+          
+          // Handle file preview if available
+          const fileContainer = document.getElementById('view-file-container');
+          const filePreview = document.getElementById('view-file-preview');
+          
+          if (expense.fileUrl) {
+              fileContainer.style.display = 'block';
+              // Check if it's an image URL
+              if (expense.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                  filePreview.innerHTML = `<img src="${expense.fileUrl}" class="img-fluid" style="max-height: 400px;" alt="Čekio nuotrauka">`;
+              } else if (expense.fileUrl.match(/\.pdf$/i)) {
+                  filePreview.innerHTML = `<a href="${expense.fileUrl}" target="_blank" class="btn btn-outline-primary"><i class="bi bi-file-pdf"></i> Atidaryti PDF</a>`;
+              } else {
+                  filePreview.innerHTML = `<a href="${expense.fileUrl}" target="_blank" class="btn btn-outline-secondary">📄 Atidaryti failą</a>`;
+              }
+          } else {
+              fileContainer.style.display = 'none';
+              filePreview.innerHTML = '';
+          }
+          
+          // Setup delete button in modal
+          document.getElementById('modal-delete-btn').onclick = function() {
+              if (confirm('Ar tikrai norite ištrinti šią išlaidą?')) {
+                  window.deleteExpense(expenseId);
+                  bootstrap.Modal.getInstance(document.getElementById('viewExpenseModal')).hide();
+              }
+          };
+          
+          // Show modal
+          const modal = new bootstrap.Modal(document.getElementById('viewExpenseModal'));
+          modal.show();
+      };
     </script>
 </body>
 </html>

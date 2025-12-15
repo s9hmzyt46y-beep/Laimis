@@ -55,6 +55,9 @@ app = Flask(
 # Secret key for flash messages
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+# Max content length: 10MB for Vercel serverless
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
 # Lazy-initialized OpenAI client (set inside route to avoid startup crashes)
 client = None
 
@@ -104,12 +107,32 @@ def clients():
     return render_template('clients.html')
 
 
+def resize_image_for_api(img, max_size=1500):
+    """
+    Resize image to reduce payload size while maintaining quality.
+    Max dimension is 1500px by default.
+    """
+    width, height = img.size
+    
+    if width > max_size or height > max_size:
+        if width > height:
+            new_width = max_size
+            new_height = int(height * (max_size / width))
+        else:
+            new_height = max_size
+            new_width = int(width * (max_size / height))
+        
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    
+    return img
+
+
 @app.route('/scan-receipt', methods=['POST'])
 def scan_receipt():
     """
-    Route to scan receipt images using OpenAI Vision API.
+    Route to scan receipt images using OpenAI Vision API (GPT-4o - best model).
     Serverless version: processes files from memory only (no disk saving).
-    Supports split categories and bulk processing.
+    Includes image resizing for Vercel payload limits.
     """
     # Define valid categories - MUST match frontend dropdown options exactly
     VALID_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
@@ -119,12 +142,12 @@ def scan_receipt():
         
         # Check if file was uploaded
         if 'file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
+            return jsonify({"error": "Nepateiktas failas"}), 400
         
         file = request.files['file']
         
         if not file.filename:
-            return jsonify({"error": "Empty file uploaded"}), 400
+            return jsonify({"error": "Tuščias failas"}), 400
         
         # Get file extension
         filename = file.filename
@@ -133,17 +156,24 @@ def scan_receipt():
         # Validate file extension
         ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
         if file_ext not in ALLOWED_EXTENSIONS:
-            return jsonify({"error": f"Unsupported file format. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
+            return jsonify({"error": f"Netinkamas failo formatas. Leidžiami: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
         
         # Read file into memory (no disk saving for serverless)
         file_bytes = file.read()
+        
+        # Check file size (max 5MB for images to avoid Vercel limits)
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+        print(f"File size: {file_size_mb:.2f} MB")
+        
+        if file_size_mb > 5:
+            return jsonify({"error": "Failas per didelis. Maksimalus dydis: 5MB"}), 400
         
         # Generate a unique filename for response (not saved to disk)
         from datetime import datetime
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         unique_filename = f"receipt_{timestamp}.{file_ext}"
         
-        # STEP 2: Preprocess image for better OCR accuracy
+        # STEP 2: Preprocess and resize image for better OCR accuracy
         try:
             if Image is None:
                 # Fallback: use original image if PIL not available
@@ -152,41 +182,49 @@ def scan_receipt():
             elif file_ext == 'pdf':
                 # PDF: Convert to image first, then preprocess
                 if fitz is None:
-                    return jsonify({"error": "PDF processing requires PyMuPDF. Install with: pip install PyMuPDF"}), 400
+                    return jsonify({"error": "PDF apdorojimui reikalingas PyMuPDF"}), 400
                 
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
                 page = doc.load_page(0)
-                pix = page.get_pixmap()
+                # Higher resolution for PDF
+                mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+                pix = page.get_pixmap(matrix=mat)
                 img_data = pix.tobytes("png")
                 doc.close()
                 
                 # Open PDF image and preprocess
                 img = Image.open(io.BytesIO(img_data))
-                img = img.convert('L')  # Convert to grayscale
+                img = resize_image_for_api(img, max_size=2000)  # Larger for PDF
+                img = img.convert('RGB')  # Convert to RGB (no grayscale for better color recognition)
                 enhancer = ImageEnhance.Contrast(img)
-                img = enhancer.enhance(2.0)  # Increase contrast
+                img = enhancer.enhance(1.5)  # Moderate contrast
                 img = img.filter(ImageFilter.SHARPEN)  # Sharpen
                 
-                # Save to buffer as PNG
+                # Save to buffer as JPEG (smaller than PNG)
                 buffer = io.BytesIO()
-                img.save(buffer, format='PNG')
+                img.save(buffer, format='JPEG', quality=85)
                 processed_bytes = buffer.getvalue()
                 base64_image = base64.b64encode(processed_bytes).decode('utf-8')
-                mime_type = 'image/png'
+                mime_type = 'image/jpeg'
             else:
                 # Image file: Preprocess directly
                 img = Image.open(io.BytesIO(file_bytes))
-                img = img.convert('L')  # Convert to grayscale
+                img = resize_image_for_api(img, max_size=1500)  # Resize for API
+                img = img.convert('RGB')  # Keep colors for better recognition
                 enhancer = ImageEnhance.Contrast(img)
-                img = enhancer.enhance(2.0)  # Increase contrast
+                img = enhancer.enhance(1.3)  # Light contrast boost
                 img = img.filter(ImageFilter.SHARPEN)  # Sharpen
                 
-                # Save to buffer as PNG
+                # Save to buffer as JPEG (smaller than PNG)
                 buffer = io.BytesIO()
-                img.save(buffer, format='PNG')
+                img.save(buffer, format='JPEG', quality=85)
                 processed_bytes = buffer.getvalue()
                 base64_image = base64.b64encode(processed_bytes).decode('utf-8')
-                mime_type = 'image/png'
+                mime_type = 'image/jpeg'
+            
+            # Log processed image size
+            processed_size_kb = len(processed_bytes) / 1024
+            print(f"Processed image size: {processed_size_kb:.1f} KB")
                 
         except Exception as e:
             # Fallback: use original image if preprocessing fails
@@ -199,20 +237,19 @@ def scan_receipt():
         if client is None:
             api_key = os.environ.get('OPENAI_API_KEY')
             if not api_key:
-                return jsonify({"error": "OpenAI API key not configured"}), 500
+                return jsonify({"error": "OpenAI API raktas nesukonfigūruotas"}), 500
             try:
                 client = OpenAI(api_key=api_key)
             except Exception as e:
-                # If client initialization fails, surface the real error
                 print(f"OpenAI client initialization error: {e}")
-                return jsonify({"error": f"Failed to initialize OpenAI client: {str(e)}"}), 500
+                return jsonify({"error": f"Nepavyko inicializuoti OpenAI: {str(e)}"}), 500
         
         # STEP 3: Build system prompt for receipt digitization
         STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
         
         system_prompt = f"""You are a forensic accounting OCR robot. Your goal is 100% data extraction completeness.
 
-The image has been high-contrast processed. Read distinct lines carefully. Do not merge lines.
+The image has been preprocessed for optimal OCR. Read all text carefully.
 
 1. **EXTRACT EVERY SINGLE LINE ITEM.** Do not skip anything. If a receipt has 50 items, return 50 items.
 
@@ -261,52 +298,64 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
 6. If VAT is only shown in summary, calculate proportionally (21% standard, 9% for books/heat).
 7. Return all items in the JSON format specified."""
 
-        # API Call with JSON response format
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": user_prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}",
-                                "detail": "high"  # Enable high resolution for better OCR
+        # API Call with JSON response format - using GPT-4o (best vision model)
+        print("Calling OpenAI API with GPT-4o...")
+        try:
+            completion = client.chat.completions.create(
+                model="gpt-4o",  # Best model for vision tasks
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": user_prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{base64_image}",
+                                    "detail": "high"  # High detail for better OCR
+                                }
                             }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=4000,
-            response_format={"type": "json_object"}
-        )
+                        ]
+                    }
+                ],
+                max_tokens=4000,
+                response_format={"type": "json_object"}
+            )
+        except Exception as api_error:
+            print(f"OpenAI API Error: {api_error}")
+            error_msg = str(api_error)
+            if "rate_limit" in error_msg.lower():
+                return jsonify({"error": "API limitas pasiektas. Bandykite vėliau."}), 429
+            elif "invalid_api_key" in error_msg.lower():
+                return jsonify({"error": "Neteisingas API raktas"}), 401
+            elif "content_policy" in error_msg.lower():
+                return jsonify({"error": "Vaizdas neatitinka turinio politikos"}), 400
+            else:
+                return jsonify({"error": f"AI klaida: {error_msg[:200]}"}), 500
         
         # Get raw content from AI response
         raw_content = completion.choices[0].message.content
         
         # Print what AI actually sent
-        print(f"DEBUG AI RAW: {raw_content}")
+        print(f"DEBUG AI RAW: {raw_content[:500]}...")
         
         # Cleaning Logic
         clean_json = re.sub(r'```json|```', '', raw_content).strip()
-        print(f"DEBUG Clean JSON: {clean_json}")
         
         # Parse JSON
         try:
             data = json.loads(clean_json)
-            print(f"DEBUG Parsed Data: {data}")
+            print(f"DEBUG Parsed Data: {type(data)}")
         except json.JSONDecodeError as je:
             print(f"JSON PARSE ERROR: {je}")
-            return jsonify({"error": f"AI returned bad JSON. Raw: {raw_content[:200]}..."}), 500
+            return jsonify({"error": f"AI grąžino neteisingą formatą. Bandykite dar kartą."}), 500
         
         # EXTREMELY FLEXIBLE JSON PARSING LOGIC
         items = None
@@ -363,6 +412,9 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
         # Validate and clean each item
         validated_items = []
         for item in items:
+            if not isinstance(item, dict):
+                continue
+                
             required_keys = ['vendor', 'date', 'category']
             has_amount = 'total_amount' in item or 'amount' in item
             
@@ -376,7 +428,7 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
             # Convert total_amount if it's a string
             if 'total_amount' in item:
                 if isinstance(item['total_amount'], str):
-                    amount_str = item['total_amount'].replace('€', '').replace('$', '').replace(',', '').strip()
+                    amount_str = item['total_amount'].replace('€', '').replace('$', '').replace(',', '.').strip()
                     try:
                         item['total_amount'] = float(amount_str)
                     except ValueError:
@@ -386,7 +438,7 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
             if 'vat_amount' not in item:
                 item['vat_amount'] = 0.0
             elif isinstance(item['vat_amount'], str):
-                vat_str = item['vat_amount'].replace('€', '').replace('$', '').replace(',', '').strip()
+                vat_str = item['vat_amount'].replace('€', '').replace('$', '').replace(',', '.').strip()
                 try:
                     item['vat_amount'] = float(vat_str) if vat_str else 0.0
                 except ValueError:
@@ -398,7 +450,7 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
                 vat = float(item.get('vat_amount', 0))
                 item['net_amount'] = total - vat
             elif isinstance(item['net_amount'], str):
-                net_str = item['net_amount'].replace('€', '').replace('$', '').replace(',', '').strip()
+                net_str = item['net_amount'].replace('€', '').replace('$', '').replace(',', '.').strip()
                 try:
                     item['net_amount'] = float(net_str) if net_str else 0.0
                 except ValueError:
@@ -488,7 +540,7 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
     except Exception as e:
         print("CRITICAL SERVER ERROR:")
         print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Serverio klaida: {str(e)[:200]}"}), 500
 
 
 @app.route('/api/generate-pdf', methods=['POST'])
@@ -741,4 +793,4 @@ def generate_pdf():
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 
-# Vercel Force Update: Clients Module
+# Vercel Force Update: v2.1 - Better error handling and image resize
