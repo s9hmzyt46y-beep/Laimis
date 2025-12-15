@@ -612,6 +612,18 @@
                 
                 showStatus('🔍 AI analizuoja čekį... Palaukite.', 'info');
                 
+                // STORE ORIGINAL IMAGE as base64 BEFORE API call
+                const originalFile = file; // Use original file, not compressed
+                const imgReader = new FileReader();
+                imgReader.onload = function(ev) {
+                    const imageDataField = document.getElementById('scannedImageData');
+                    if (imageDataField) {
+                        imageDataField.value = ev.target.result;
+                        console.log('✅ Originalus vaizdas išsaugotas:', (ev.target.result.length / 1024).toFixed(1), 'KB');
+                    }
+                };
+                imgReader.readAsDataURL(originalFile);
+                
                 // Create FormData to send file
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
@@ -716,21 +728,6 @@
                         descField.value = item.description;
                         descField.style.backgroundColor = '#d4edda';
                         setTimeout(() => descField.style.backgroundColor = '', 2000);
-                    }
-                    
-                    // STORE ORIGINAL IMAGE as base64 for later viewing
-                    try {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            const imageDataField = document.getElementById('scannedImageData');
-                            if (imageDataField) {
-                                imageDataField.value = e.target.result;
-                                console.log('✅ Original image stored for viewing');
-                            }
-                        };
-                        reader.readAsDataURL(fileToUpload);
-                    } catch (imgErr) {
-                        console.warn('Could not store image:', imgErr);
                     }
                     
                     // Show success

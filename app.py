@@ -327,26 +327,44 @@ Kategorijų logika:
 
 ## ❌ KO NEDARYTI:
 - NEVERSK produktų į anglų kalbą
-- NESUGALVOK produktų pavadinimų
+- NESUGALVOK produktų pavadinimų - jei nematai, nerašyk
 - NESUMUOK kelių produktų į vieną
 - NEPRALEISK jokių eilučių
+- NEINTERPRETUOK - tik kopijuok
 
 ## ✅ KĄ DARYTI:
-- Kopijuok TIKSLIAI kaip parašyta
-- Kiekvieną produktą į atskirą eilutę
-- Jei neįskaitoma - geriau praleisk nei sugalvok"""
+- Kopijuok TIKSLIAI simbolis po simbolio kaip parašyta
+- Išlaikyk didžiąsias/mažąsias raides kaip originale
+- Išlaikyk sutrumpinimus (pvz. "POM.TRINT." ne "Pomidorų trintukas")
+- Išlaikyk skaičius ir vienetų matavimus (pvz. "500G", "2.5%", "1L")
+- Jei matai "PIENAS ROKIŠKIO 2.5% 1L" - rašyk tiksliai taip, ne "Pienas"
+- Jei neįskaitoma - PRALEISK, bet NESUGALVOK
+
+## 🔍 PAVYZDŽIAI:
+Čekyje: "SVIEST.ROKIŠKIO 82% 200G" → description: "SVIEST.ROKIŠKIO 82% 200G"
+Čekyje: "BATON.ŠALD.VIRTA 400G" → description: "BATON.ŠALD.VIRTA 400G"  
+Čekyje: "DUONA BALTA VILNIAUS" → description: "DUONA BALTA VILNIAUS"
+Čekyje: "KEFYRAS 2.5% 1L" → description: "KEFYRAS 2.5% 1L"
+
+NEGALIMA: "Pienas", "Sviestas", "Duona" - tai PER TRUMPA! Kopijuok visą eilutę."""
         
         # User prompt - very specific
-        user_prompt = """TIKSLIAI nuskaityk šį lietuvišką čekį.
+        user_prompt = """TIKSLIAI nuskaityk šį lietuvišką čekį kaip OCR skaitytuvas.
 
 INSTRUKCIJOS:
-1. Rask parduotuvės pavadinimą viršuje
+1. Rask parduotuvės pavadinimą viršuje (pvz. MAXIMA, LIDL, IKI)
 2. Rask datą (formatas YYYY-MM-DD)
-3. Kiekvieną produkto eilutę kopijuok TIKSLIAI kaip parašyta
-4. Kiekvienam produktui priskirk kategoriją
-5. Apskaičiuok PVM (21%)
+3. Kiekvieną produkto eilutę KOPIJUOK SIMBOLIS PO SIMBOLIO:
+   - Išlaikyk VISUS žodžius, skaičius, sutrumpinimus
+   - Pvz. "SVIEST.ROKIŠKIO 82% 200G" → būtent taip, ne "Sviestas"
+   - Pvz. "KEFYRAS VILKYŠKIŲ 2.5% 1L" → būtent taip, ne "Kefyras"
+4. Kainą imk iš dešinės pusės
+5. Kategoriją priskirk pagal produkto tipą
 
-⚠️ SVARBIAUSIAI: description lauke turi būti TIKSLUS tekstas iš čekio, ne tavo interpretacija!
+⚠️ KRITIŠKAI SVARBU:
+- description = TIKSLUS čekio tekstas, ne sutrumpinimas
+- Jei čekyje parašyta "DUONA BALTA VILNIAUS 400G" - grąžink tiksliai tai
+- NEGALIMA grąžinti tik "Duona" ar "Pienas" - tai per trumpa!"""
 
 Grąžink JSON su visais produktais."""
 
