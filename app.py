@@ -495,12 +495,16 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
 def generate_pdf():
     """
     Serverless PDF generation endpoint using FPDF2 with full Unicode support.
-    Supports Lithuanian characters and seller/buyer details.
+    Supports Lithuanian characters, seller/buyer details, and payment terms.
     """
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON body provided"}), 400
+
+        # Invoice title (customizable)
+        invoice_title = (data.get("invoice_title") or "PVM SASKAITA FAKTURA").strip()
+        invoice_series = (data.get("invoice_series") or "SF").strip()
 
         # Seller details
         seller_name = (data.get("seller_name") or "").strip()
@@ -518,6 +522,7 @@ def generate_pdf():
         # Invoice details
         invoice_number = (data.get("invoice_number") or "").strip()
         date_str = (data.get("date") or "").strip()
+        due_date_str = (data.get("due_date") or "").strip()
         items = data.get("items") or []
         
         # Get totals from payload (or calculate)
@@ -562,15 +567,23 @@ def generate_pdf():
         pdf.set_font("Helvetica", "B", 16)
         pdf.set_fill_color(41, 128, 185)  # Blue header
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 12, "SASKAITA FAKTURA", ln=True, align="C", fill=True)
+        pdf.cell(0, 12, safe_text(invoice_title), ln=True, align="C", fill=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(3)
 
         # Invoice number and date
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(95, 7, f"Saskaitos Nr.: {safe_text(invoice_number)}", border=0)
+        full_invoice_number = f"{invoice_series}-{invoice_number}"
+        pdf.cell(95, 7, f"Saskaitos Nr.: {safe_text(full_invoice_number)}", border=0)
         pdf.cell(95, 7, f"Data: {date_str}", border=0, align="R")
-        pdf.ln(10)
+        pdf.ln()
+        
+        # Due date if provided
+        if due_date_str:
+            pdf.set_font("Helvetica", "", 10)
+            pdf.cell(95, 6, "", border=0)
+            pdf.cell(95, 6, f"Apmoketi iki: {due_date_str}", border=0, align="R")
+        pdf.ln(8)
 
         # ========== SELLER & BUYER INFO ==========
         pdf.set_fill_color(245, 245, 245)
@@ -707,7 +720,7 @@ def generate_pdf():
         buffer = io.BytesIO(pdf_bytes)
         buffer.seek(0)
 
-        filename = f"SF_{invoice_number}.pdf"
+        filename = f"{invoice_series}-{invoice_number}.pdf"
         return send_file(
             buffer,
             mimetype="application/pdf",

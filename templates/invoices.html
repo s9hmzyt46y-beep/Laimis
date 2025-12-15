@@ -16,9 +16,12 @@
         .total-row { font-weight: bold; font-size: 1.1em; border-top: 2px solid #dee2e6; padding-top: 10px; margin-top: 10px; }
         .invoice-row { cursor: pointer; transition: background 0.2s; }
         .invoice-row:hover { background: #e3f2fd; }
-        .status-paid { color: #28a745; font-weight: bold; }
-        .status-pending { color: #ffc107; font-weight: bold; }
-        .status-overdue { color: #dc3545; font-weight: bold; }
+        .status-paid { background-color: #d4edda; color: #155724; }
+        .status-pending { background-color: #fff3cd; color: #856404; }
+        .status-overdue { background-color: #f8d7da; color: #721c24; }
+        .invoice-title-input { font-size: 1.1em; font-weight: bold; border: 1px dashed #ccc; background: transparent; }
+        .invoice-title-input:focus { border: 1px solid #007bff; background: white; }
+        .seller-saved-badge { background: #28a745; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
     </style>
 </head>
 <body>
@@ -54,20 +57,20 @@
             </div>
             <div class="col-md-3 mb-3">
                 <div class="stat-card green">
-                    <h3 id="stat-total-amount">0 €</h3>
-                    <p>💰 Bendra suma</p>
+                    <h3 id="stat-paid-amount">0 €</h3>
+                    <p>✅ Apmokėta</p>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="stat-card orange">
-                    <h3 id="stat-this-month">0 €</h3>
-                    <p>📅 Šį mėnesį</p>
+                    <h3 id="stat-unpaid-amount">0 €</h3>
+                    <p>⏳ Neapmokėta</p>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="stat-card blue">
-                    <h3 id="stat-avg">0 €</h3>
-                    <p>📊 Vidutinė sąskaita</p>
+                    <h3 id="stat-this-month">0 €</h3>
+                    <p>📅 Šį mėnesį</p>
                 </div>
             </div>
         </div>
@@ -77,26 +80,38 @@
             <div class="col-lg-6 mb-4">
                 <div class="card">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">➕ Nauja sąskaita faktūra</h5>
-                        <button type="button" class="btn btn-sm btn-light" onclick="clearInvoiceForm()">🔄 Išvalyti</button>
+                        <h5 class="mb-0">➕ Nauja sąskaita</h5>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-light me-1" onclick="exportToExcel()">📊 Excel</button>
+                            <button type="button" class="btn btn-sm btn-light" onclick="clearInvoiceForm()">🔄 Išvalyti</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form id="invoice-form">
                             <input type="hidden" id="editing-invoice-id" value="">
                             
+                            <!-- Sąskaitos pavadinimas (redaguojamas) -->
+                            <div class="mb-3">
+                                <label class="form-label">📋 Dokumento tipas</label>
+                                <input type="text" class="form-control invoice-title-input" name="invoice_title" 
+                                       value="PVM SĄSKAITA FAKTŪRA" placeholder="PVM SĄSKAITA FAKTŪRA">
+                            </div>
+                            
                             <!-- Pardavėjo duomenys -->
                             <div class="card bg-light mb-3">
-                                <div class="card-header py-2">
+                                <div class="card-header py-2 d-flex justify-content-between align-items-center">
                                     <strong>🏢 Pardavėjo duomenys</strong>
-                                    <button type="button" class="btn btn-sm btn-link float-end" data-bs-toggle="collapse" data-bs-target="#sellerDetails">
-                                        ▼ Rodyti/Slėpti
-                                    </button>
+                                    <div>
+                                        <span id="seller-saved-badge" class="seller-saved-badge" style="display:none;">Išsaugota</span>
+                                        <button type="button" class="btn btn-sm btn-success ms-2" onclick="saveSellerData()" title="Išsaugoti duomenis">💾</button>
+                                        <button type="button" class="btn btn-sm btn-link" data-bs-toggle="collapse" data-bs-target="#sellerDetails">▼</button>
+                                    </div>
                                 </div>
                                 <div class="collapse show" id="sellerDetails">
                                     <div class="card-body py-2">
                                         <div class="row g-2">
                                             <div class="col-md-6">
-                                                <input type="text" class="form-control form-control-sm" name="seller_name" placeholder="Įmonės pavadinimas" value="">
+                                                <input type="text" class="form-control form-control-sm" name="seller_name" placeholder="Įmonės pavadinimas">
                                             </div>
                                             <div class="col-md-6">
                                                 <input type="text" class="form-control form-control-sm" name="seller_code" placeholder="Įmonės kodas">
@@ -129,9 +144,15 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">📄 Sąskaitos Nr.</label>
-                                    <input type="text" class="form-control" name="invoice_number" placeholder="SF-001" required>
-                                    <label class="form-label mt-2">📅 Data</label>
-                                    <input type="date" class="form-control" name="date" required>
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control" name="invoice_series" placeholder="SF" style="max-width:80px;">
+                                        <span class="input-group-text">-</span>
+                                        <input type="number" class="form-control" name="invoice_number" placeholder="001" min="1" required>
+                                    </div>
+                                    <label class="form-label">📅 Išrašymo data</label>
+                                    <input type="date" class="form-control mb-2" name="date" required>
+                                    <label class="form-label">⏰ Apmokėjimo terminas</label>
+                                    <input type="date" class="form-control" name="due_date">
                                 </div>
                             </div>
 
@@ -186,8 +207,9 @@
             <!-- Right: Saved Invoices List -->
             <div class="col-lg-6 mb-4">
                 <div class="card">
-                    <div class="card-header bg-dark text-white">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">📋 Išsaugotos sąskaitos</h5>
+                        <button class="btn btn-sm btn-outline-light" onclick="exportAllInvoicesToExcel()">📊 Eksportuoti Excel</button>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -198,12 +220,13 @@
                                         <th>Klientas</th>
                                         <th>Data</th>
                                         <th class="text-end">Suma</th>
+                                        <th class="text-center">Statusas</th>
                                         <th class="text-center">Veiksmai</th>
                                     </tr>
                                 </thead>
                                 <tbody id="invoices-list">
                                     <tr>
-                                        <td colspan="5" class="text-center text-muted py-4">
+                                        <td colspan="6" class="text-center text-muted py-4">
                                             ⏳ Kraunama...
                                         </td>
                                     </tr>
@@ -221,7 +244,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">📄 Sąskaita <span id="modal-invoice-number"></span></h5>
+                    <h5 class="modal-title">📄 <span id="modal-invoice-title">Sąskaita</span> <span id="modal-invoice-number"></span></h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="modal-invoice-body">
@@ -235,7 +258,39 @@
         </div>
     </div>
 
+    <!-- Payment Status Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">💰 Apmokėjimo statusas</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="payment-invoice-id">
+                    <div class="mb-3">
+                        <label class="form-label">Statusas</label>
+                        <select class="form-select" id="payment-status">
+                            <option value="unpaid">⏳ Neapmokėta</option>
+                            <option value="paid">✅ Apmokėta</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="payment-date-group" style="display:none;">
+                        <label class="form-label">Apmokėjimo data</label>
+                        <input type="date" class="form-control" id="payment-date">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atšaukti</button>
+                    <button type="button" class="btn btn-success" onclick="savePaymentStatus()">💾 Išsaugoti</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
     <script>
         // DOM Elements
@@ -243,6 +298,66 @@
         const subtotalEl = document.getElementById('subtotal');
         const vatTotalEl = document.getElementById('vat-total');
         const invoiceTotalEl = document.getElementById('invoice-total');
+
+        // Load seller data from localStorage on page load
+        function loadSellerData() {
+            const saved = localStorage.getItem('sellerData');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    const form = document.getElementById('invoice-form');
+                    if (data.seller_name) form.querySelector('[name="seller_name"]').value = data.seller_name;
+                    if (data.seller_code) form.querySelector('[name="seller_code"]').value = data.seller_code;
+                    if (data.seller_vat) form.querySelector('[name="seller_vat"]').value = data.seller_vat;
+                    if (data.seller_bank) form.querySelector('[name="seller_bank"]').value = data.seller_bank;
+                    if (data.seller_address) form.querySelector('[name="seller_address"]').value = data.seller_address;
+                    document.getElementById('seller-saved-badge').style.display = 'inline';
+                    console.log("✅ Pardavėjo duomenys užkrauti");
+                } catch(e) {
+                    console.error("Error loading seller data:", e);
+                }
+            }
+            
+            // Load invoice series
+            const series = localStorage.getItem('invoiceSeries');
+            if (series) {
+                document.querySelector('[name="invoice_series"]').value = series;
+            } else {
+                document.querySelector('[name="invoice_series"]').value = 'SF';
+            }
+        }
+
+        // Save seller data to localStorage
+        window.saveSellerData = function() {
+            const form = document.getElementById('invoice-form');
+            const data = {
+                seller_name: form.querySelector('[name="seller_name"]').value.trim(),
+                seller_code: form.querySelector('[name="seller_code"]').value.trim(),
+                seller_vat: form.querySelector('[name="seller_vat"]').value.trim(),
+                seller_bank: form.querySelector('[name="seller_bank"]').value.trim(),
+                seller_address: form.querySelector('[name="seller_address"]').value.trim()
+            };
+            localStorage.setItem('sellerData', JSON.stringify(data));
+            
+            // Also save series
+            const series = form.querySelector('[name="invoice_series"]').value.trim() || 'SF';
+            localStorage.setItem('invoiceSeries', series);
+            
+            document.getElementById('seller-saved-badge').style.display = 'inline';
+            alert('✅ Pardavėjo duomenys išsaugoti!');
+        };
+
+        // Set today's date and default due date (14 days)
+        function setDefaultDates() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            document.querySelector('[name="date"]').value = todayStr;
+            
+            // Due date: 14 days from now
+            const dueDate = new Date(today);
+            dueDate.setDate(dueDate.getDate() + 14);
+            document.querySelector('[name="due_date"]').value = dueDate.toISOString().split('T')[0];
+        }
 
         // Recalculate totals
         function recalcTotals() {
@@ -288,7 +403,6 @@
         }
 
         document.getElementById('add-item-btn').addEventListener('click', () => addItem());
-        addItem(); // Initial row
 
         // Clear form
         window.clearInvoiceForm = function() {
@@ -297,37 +411,26 @@
             itemsBody.innerHTML = '';
             addItem();
             document.getElementById('save-invoice-btn').innerHTML = '💾 Išsaugoti sąskaitą';
-        };
-
-        // Get form data
-        function getInvoiceData() {
-            const form = document.getElementById('invoice-form');
-            const items = [];
-            itemsBody.querySelectorAll('tr').forEach(row => {
-                const desc = row.querySelector('[name="item_description"]').value.trim();
-                const qty = parseFloat(row.querySelector('[name="item_qty"]').value) || 0;
-                const net = parseFloat(row.querySelector('[name="item_net"]').value) || 0;
-                const vatRate = parseFloat(row.querySelector('[name="item_vat_rate"]').value) || 21;
-                const total = parseFloat(row.querySelector('[name="item_total"]').value) || 0;
-                if (desc && qty > 0) {
-                    items.push({ description: desc, qty, net, vatRate, vatAmount: net * qty * vatRate / 100, total });
-                }
-            });
             
-            return {
-                client_name: form.querySelector('[name="client_name"]').value.trim(),
-                invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
-                date: form.querySelector('[name="date"]').value,
-                items: items,
-                subtotal: parseFloat(subtotalEl.textContent) || 0,
-                vat_total: parseFloat(vatTotalEl.textContent) || 0,
-                total: parseFloat(invoiceTotalEl.textContent) || 0
-            };
-        }
+            // Restore seller data and defaults
+            loadSellerData();
+            setDefaultDates();
+            
+            // Set next invoice number
+            if (window.allInvoices && window.allInvoices.length > 0) {
+                const maxNum = Math.max(...window.allInvoices.map(inv => parseInt(inv.invoice_num) || 0));
+                document.querySelector('[name="invoice_number"]').value = maxNum + 1;
+            } else {
+                document.querySelector('[name="invoice_number"]').value = 1;
+            }
+        };
 
         // Load invoice into form for editing
         window.loadInvoiceToForm = function(invoice) {
             const form = document.getElementById('invoice-form');
+            
+            // Document title
+            form.querySelector('[name="invoice_title"]').value = invoice.invoice_title || 'PVM SĄSKAITA FAKTŪRA';
             
             // Pardavėjo duomenys
             if (form.querySelector('[name="seller_name"]')) form.querySelector('[name="seller_name"]').value = invoice.seller_name || '';
@@ -343,8 +446,10 @@
             if (form.querySelector('[name="client_address"]')) form.querySelector('[name="client_address"]').value = invoice.client_address || '';
             
             // Sąskaitos duomenys
-            form.querySelector('[name="invoice_number"]').value = invoice.invoice_number || '';
+            form.querySelector('[name="invoice_series"]').value = invoice.invoice_series || 'SF';
+            form.querySelector('[name="invoice_number"]').value = invoice.invoice_num || '';
             form.querySelector('[name="date"]').value = invoice.date || '';
+            form.querySelector('[name="due_date"]').value = invoice.due_date || '';
             document.getElementById('editing-invoice-id').value = invoice.id || '';
             
             itemsBody.innerHTML = '';
@@ -359,9 +464,9 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        // Generate PDF - exposed globally
+        // Generate PDF
         window.generatePDF = async function(invoiceData = null) {
-            const data = invoiceData || getInvoiceData();
+            const data = invoiceData || window.getInvoiceData();
             
             if (!data.client_name || !data.invoice_number || !data.date) {
                 alert('Užpildykite visus laukus!');
@@ -392,7 +497,7 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${data.invoice_number}.pdf`;
+                a.download = `${data.invoice_series}-${data.invoice_number}.pdf`;
                 a.click();
                 window.URL.revokeObjectURL(url);
             } catch (error) {
@@ -401,9 +506,168 @@
                 btn.disabled = false;
                 btn.innerHTML = '📄 PDF';
             }
-        }
+        };
 
         document.getElementById('generate-pdf-btn').addEventListener('click', () => window.generatePDF());
+
+        // Payment status modal handling
+        document.getElementById('payment-status').addEventListener('change', function() {
+            const dateGroup = document.getElementById('payment-date-group');
+            if (this.value === 'paid') {
+                dateGroup.style.display = 'block';
+                document.getElementById('payment-date').value = new Date().toISOString().split('T')[0];
+            } else {
+                dateGroup.style.display = 'none';
+            }
+        });
+
+        window.showPaymentModal = function(invoiceId) {
+            const invoice = window.allInvoices?.find(i => i.id === invoiceId);
+            if (!invoice) return;
+            
+            document.getElementById('payment-invoice-id').value = invoiceId;
+            document.getElementById('payment-status').value = invoice.payment_status || 'unpaid';
+            
+            const dateGroup = document.getElementById('payment-date-group');
+            if (invoice.payment_status === 'paid') {
+                dateGroup.style.display = 'block';
+                document.getElementById('payment-date').value = invoice.payment_date || '';
+            } else {
+                dateGroup.style.display = 'none';
+            }
+            
+            new bootstrap.Modal(document.getElementById('paymentModal')).show();
+        };
+
+        window.savePaymentStatus = async function() {
+            const invoiceId = document.getElementById('payment-invoice-id').value;
+            const status = document.getElementById('payment-status').value;
+            const paymentDate = status === 'paid' ? document.getElementById('payment-date').value : null;
+            
+            try {
+                await window.db.transact([
+                    window.tx.invoices[invoiceId].update({
+                        payment_status: status,
+                        payment_date: paymentDate
+                    })
+                ]);
+                bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+                alert('✅ Statusas atnaujintas!');
+            } catch(e) {
+                alert('Klaida: ' + e.message);
+            }
+        };
+
+        // Excel export for single invoice
+        window.exportToExcel = function() {
+            const data = window.getInvoiceData();
+            if (!data.client_name) {
+                alert('Užpildykite sąskaitos duomenis!');
+                return;
+            }
+            
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            
+            // Invoice info sheet
+            const infoData = [
+                ['Sąskaitos informacija'],
+                ['Tipas', data.invoice_title],
+                ['Numeris', `${data.invoice_series}-${data.invoice_number}`],
+                ['Data', data.date],
+                ['Apmokėjimo terminas', data.due_date],
+                [''],
+                ['Pardavėjas'],
+                ['Pavadinimas', data.seller_name],
+                ['Įmonės kodas', data.seller_code],
+                ['PVM kodas', data.seller_vat],
+                ['IBAN', data.seller_bank],
+                ['Adresas', data.seller_address],
+                [''],
+                ['Pirkėjas'],
+                ['Pavadinimas', data.client_name],
+                ['Įmonės kodas', data.client_code],
+                ['PVM kodas', data.client_vat],
+                ['Adresas', data.client_address],
+            ];
+            const ws1 = XLSX.utils.aoa_to_sheet(infoData);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Informacija');
+            
+            // Items sheet
+            const itemsData = [
+                ['Aprašymas', 'Kiekis', 'Kaina be PVM', 'PVM %', 'PVM suma', 'Suma su PVM'],
+                ...data.items.map(item => [
+                    item.description,
+                    item.qty,
+                    item.net,
+                    item.vatRate,
+                    item.vatAmount,
+                    item.total
+                ]),
+                [],
+                ['', '', '', '', 'Be PVM:', data.subtotal],
+                ['', '', '', '', 'PVM:', data.vat_total],
+                ['', '', '', '', 'VISO:', data.total]
+            ];
+            const ws2 = XLSX.utils.aoa_to_sheet(itemsData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Prekės');
+            
+            // Download
+            XLSX.writeFile(wb, `${data.invoice_series}-${data.invoice_number}.xlsx`);
+        };
+
+        // Excel export for all invoices
+        window.exportAllInvoicesToExcel = function() {
+            if (!window.allInvoices || window.allInvoices.length === 0) {
+                alert('Nėra sąskaitų eksportui!');
+                return;
+            }
+            
+            const wb = XLSX.utils.book_new();
+            
+            // Summary sheet
+            const summaryData = [
+                ['Sąskaitų sąrašas'],
+                ['Eksportuota', new Date().toLocaleString('lt-LT')],
+                [''],
+                ['Nr.', 'Klientas', 'Data', 'Terminas', 'Suma be PVM', 'PVM', 'Suma su PVM', 'Statusas', 'Apmokėta']
+            ];
+            
+            window.allInvoices.forEach(inv => {
+                summaryData.push([
+                    `${inv.invoice_series || 'SF'}-${inv.invoice_num || ''}`,
+                    inv.client_name,
+                    inv.date,
+                    inv.due_date || '',
+                    inv.subtotal || 0,
+                    inv.vat_total || 0,
+                    inv.total || 0,
+                    inv.payment_status === 'paid' ? 'Apmokėta' : 'Neapmokėta',
+                    inv.payment_date || ''
+                ]);
+            });
+            
+            // Add totals row
+            const totalAmount = window.allInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+            const paidAmount = window.allInvoices.filter(i => i.payment_status === 'paid').reduce((sum, inv) => sum + (inv.total || 0), 0);
+            summaryData.push([]);
+            summaryData.push(['', '', '', 'VISO:', '', '', totalAmount.toFixed(2)]);
+            summaryData.push(['', '', '', 'Apmokėta:', '', '', paidAmount.toFixed(2)]);
+            summaryData.push(['', '', '', 'Neapmokėta:', '', '', (totalAmount - paidAmount).toFixed(2)]);
+            
+            const ws = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, ws, 'Sąskaitos');
+            
+            // Download
+            XLSX.writeFile(wb, `Saskaitos_${new Date().toISOString().split('T')[0]}.xlsx`);
+        };
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSellerData();
+            setDefaultDates();
+            addItem(); // Initial row
+        });
     </script>
 
     <!-- InstantDB integration -->
@@ -448,12 +712,21 @@
                     const opt = document.createElement('option');
                     opt.value = c.id;
                     opt.textContent = c.name || '(be pavadinimo)';
+                    opt.dataset.code = c.code || '';
+                    opt.dataset.vat = c.vat_code || '';
+                    opt.dataset.address = c.address || '';
                     select.appendChild(opt);
                 });
                 select.onchange = () => {
-                    const client = clients.find(c => c.id === select.value);
-                    if (client) document.querySelector('[name="client_name"]').value = client.name || '';
+                    const selectedOption = select.options[select.selectedIndex];
+                    if (selectedOption.value) {
+                        document.querySelector('[name="client_name"]').value = selectedOption.textContent;
+                        document.querySelector('[name="client_code"]').value = selectedOption.dataset.code || '';
+                        document.querySelector('[name="client_vat"]').value = selectedOption.dataset.vat || '';
+                        document.querySelector('[name="client_address"]').value = selectedOption.dataset.address || '';
+                    }
                 };
+                window.allClients = clients;
             });
         }
 
@@ -465,9 +738,22 @@
                     return;
                 }
                 const invoices = resp.data.invoices || [];
+                window.allInvoices = invoices;
                 renderInvoicesList(invoices);
                 updateStatistics(invoices);
+                setNextInvoiceNumber(invoices);
             });
+        }
+
+        // Set next invoice number automatically
+        function setNextInvoiceNumber(invoices) {
+            const numInput = document.querySelector('[name="invoice_number"]');
+            if (!numInput.value || numInput.value === '') {
+                const maxNum = invoices.length > 0 
+                    ? Math.max(...invoices.map(inv => parseInt(inv.invoice_num) || 0))
+                    : 0;
+                numInput.value = maxNum + 1;
+            }
         }
 
         // Render invoices list
@@ -475,35 +761,55 @@
             const tbody = document.getElementById('invoices-list');
             
             if (invoices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">📭 Nėra išsaugotų sąskaitų</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">📭 Nėra išsaugotų sąskaitų</td></tr>';
                 return;
             }
 
             // Sort by date descending
             invoices.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            tbody.innerHTML = invoices.map(inv => `
+            tbody.innerHTML = invoices.map(inv => {
+                // Determine payment status styling
+                let statusClass = 'status-pending';
+                let statusText = '⏳ Laukia';
+                
+                if (inv.payment_status === 'paid') {
+                    statusClass = 'status-paid';
+                    statusText = '✅ Apmokėta';
+                } else if (inv.due_date) {
+                    const dueDate = new Date(inv.due_date);
+                    if (dueDate < new Date()) {
+                        statusClass = 'status-overdue';
+                        statusText = '❌ Vėluoja';
+                    }
+                }
+                
+                return `
                 <tr class="invoice-row" onclick="window.viewInvoice('${inv.id}')">
-                    <td><strong>${inv.invoice_number || '-'}</strong></td>
+                    <td><strong>${inv.invoice_series || 'SF'}-${inv.invoice_num || '-'}</strong></td>
                     <td>${inv.client_name || '-'}</td>
                     <td>${inv.date || '-'}</td>
                     <td class="text-end"><strong>${(inv.total || 0).toFixed(2)} €</strong></td>
+                    <td class="text-center">
+                        <span class="badge ${statusClass}" style="cursor:pointer;" onclick="event.stopPropagation(); window.showPaymentModal('${inv.id}')">${statusText}</span>
+                    </td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary me-1" onclick="event.stopPropagation(); window.editInvoice('${inv.id}')" title="Redaguoti">✏️</button>
                         <button class="btn btn-sm btn-outline-success me-1" onclick="event.stopPropagation(); window.downloadInvoicePdf('${inv.id}')" title="PDF">📄</button>
                         <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); window.deleteInvoice('${inv.id}')" title="Trinti">🗑️</button>
                     </td>
                 </tr>
-            `).join('');
-
-            // Store invoices for later access
-            window.allInvoices = invoices;
+            `}).join('');
         }
 
         // Update statistics
         function updateStatistics(invoices) {
             const totalCount = invoices.length;
-            const totalAmount = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+            const paidInvoices = invoices.filter(inv => inv.payment_status === 'paid');
+            const unpaidInvoices = invoices.filter(inv => inv.payment_status !== 'paid');
+            
+            const paidAmount = paidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+            const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
             
             // This month
             const now = new Date();
@@ -512,24 +818,20 @@
                 return invDate.getMonth() === now.getMonth() && invDate.getFullYear() === now.getFullYear();
             });
             const thisMonthAmount = thisMonthInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-            
-            const avgAmount = totalCount > 0 ? totalAmount / totalCount : 0;
 
             document.getElementById('stat-total-count').textContent = totalCount;
-            document.getElementById('stat-total-amount').textContent = totalAmount.toFixed(2) + ' €';
+            document.getElementById('stat-paid-amount').textContent = paidAmount.toFixed(2) + ' €';
+            document.getElementById('stat-unpaid-amount').textContent = unpaidAmount.toFixed(2) + ' €';
             document.getElementById('stat-this-month').textContent = thisMonthAmount.toFixed(2) + ' €';
-            document.getElementById('stat-avg').textContent = avgAmount.toFixed(2) + ' €';
         }
 
         // Save invoice
         window.saveInvoice = async function() {
-            // Check if user is logged in
             if (!window.currentUser || !window.currentUser.id) {
                 alert('Klaida: Vartotojas neprisijungęs!');
                 return;
             }
             
-            // Get form data directly
             const form = document.getElementById('invoice-form');
             const itemsBody = document.getElementById('items-body');
             const items = [];
@@ -545,6 +847,7 @@
             });
 
             const invoiceData = {
+                invoice_title: form.querySelector('[name="invoice_title"]').value.trim() || 'PVM SĄSKAITA FAKTŪRA',
                 // Pardavėjo duomenys
                 seller_name: form.querySelector('[name="seller_name"]')?.value.trim() || '',
                 seller_code: form.querySelector('[name="seller_code"]')?.value.trim() || '',
@@ -557,15 +860,17 @@
                 client_vat: form.querySelector('[name="client_vat"]')?.value.trim() || '',
                 client_address: form.querySelector('[name="client_address"]')?.value.trim() || '',
                 // Sąskaitos duomenys
-                invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
+                invoice_series: form.querySelector('[name="invoice_series"]').value.trim() || 'SF',
+                invoice_num: parseInt(form.querySelector('[name="invoice_number"]').value) || 1,
                 date: form.querySelector('[name="date"]').value,
+                due_date: form.querySelector('[name="due_date"]').value || '',
                 items: items,
                 subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
                 vat_total: parseFloat(document.getElementById('vat-total').textContent) || 0,
                 total: parseFloat(document.getElementById('invoice-total').textContent) || 0
             };
 
-            if (!invoiceData.client_name || !invoiceData.invoice_number || !invoiceData.date) {
+            if (!invoiceData.client_name || !invoiceData.invoice_num || !invoiceData.date) {
                 alert('Užpildykite visus laukus!');
                 return;
             }
@@ -583,11 +888,13 @@
                 const editingId = document.getElementById('editing-invoice-id').value;
                 const invoiceId = editingId || window.id();
 
-                console.log('Saving invoice:', invoiceId, invoiceData);
+                const existingInvoice = window.allInvoices?.find(i => i.id === editingId);
 
                 await window.db.transact([
                     window.tx.invoices[invoiceId].update({
                         ...invoiceData,
+                        payment_status: existingInvoice?.payment_status || 'unpaid',
+                        payment_date: existingInvoice?.payment_date || null,
                         userId: window.currentUser.id,
                         updatedAt: new Date().toISOString()
                     })
@@ -609,7 +916,8 @@
             const invoice = window.allInvoices?.find(i => i.id === invoiceId);
             if (!invoice) return;
 
-            document.getElementById('modal-invoice-number').textContent = invoice.invoice_number;
+            document.getElementById('modal-invoice-title').textContent = invoice.invoice_title || 'Sąskaita';
+            document.getElementById('modal-invoice-number').textContent = `${invoice.invoice_series || 'SF'}-${invoice.invoice_num}`;
             
             let itemsHtml = '';
             (invoice.items || []).forEach(item => {
@@ -654,13 +962,24 @@
                     </div>
                 </div>`;
 
+            // Payment status
+            let paymentInfo = '';
+            if (invoice.payment_status === 'paid') {
+                paymentInfo = `<span class="badge bg-success">✅ Apmokėta${invoice.payment_date ? ': ' + invoice.payment_date : ''}</span>`;
+            } else {
+                paymentInfo = `<span class="badge bg-warning text-dark">⏳ Neapmokėta</span>`;
+            }
+
             document.getElementById('modal-invoice-body').innerHTML = `
                 <div class="row mb-2">
-                    <div class="col-md-6">
-                        <strong>Sąskaitos Nr.:</strong> ${invoice.invoice_number}
-                    </div>
-                    <div class="col-md-6 text-end">
+                    <div class="col-md-4">
                         <strong>Data:</strong> ${invoice.date}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Terminas:</strong> ${invoice.due_date || '-'}
+                    </div>
+                    <div class="col-md-4 text-end">
+                        ${paymentInfo}
                     </div>
                 </div>
                 <div class="row">
@@ -702,7 +1021,30 @@
         window.downloadInvoicePdf = async function(invoiceId) {
             const invoice = window.allInvoices?.find(i => i.id === invoiceId);
             if (!invoice) return;
-            await window.generatePDF(invoice);
+            
+            // Convert to format expected by generatePDF
+            const pdfData = {
+                invoice_title: invoice.invoice_title || 'PVM SĄSKAITA FAKTŪRA',
+                invoice_series: invoice.invoice_series || 'SF',
+                invoice_number: invoice.invoice_num,
+                date: invoice.date,
+                due_date: invoice.due_date,
+                seller_name: invoice.seller_name,
+                seller_code: invoice.seller_code,
+                seller_vat: invoice.seller_vat,
+                seller_bank: invoice.seller_bank,
+                seller_address: invoice.seller_address,
+                client_name: invoice.client_name,
+                client_code: invoice.client_code,
+                client_vat: invoice.client_vat,
+                client_address: invoice.client_address,
+                items: invoice.items,
+                subtotal: invoice.subtotal,
+                vat_total: invoice.vat_total,
+                total: invoice.total
+            };
+            
+            await window.generatePDF(pdfData);
         };
 
         // Delete invoice
@@ -728,7 +1070,7 @@
             }
         };
 
-        // Make getInvoiceData available
+        // Get invoice data from form
         window.getInvoiceData = function() {
             const form = document.getElementById('invoice-form');
             const itemsBody = document.getElementById('items-body');
@@ -744,6 +1086,11 @@
                 }
             });
             return {
+                invoice_title: form.querySelector('[name="invoice_title"]').value.trim() || 'PVM SĄSKAITA FAKTŪRA',
+                invoice_series: form.querySelector('[name="invoice_series"]').value.trim() || 'SF',
+                invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
+                date: form.querySelector('[name="date"]').value,
+                due_date: form.querySelector('[name="due_date"]').value || '',
                 // Pardavėjo duomenys
                 seller_name: form.querySelector('[name="seller_name"]')?.value.trim() || '',
                 seller_code: form.querySelector('[name="seller_code"]')?.value.trim() || '',
@@ -755,9 +1102,7 @@
                 client_code: form.querySelector('[name="client_code"]')?.value.trim() || '',
                 client_vat: form.querySelector('[name="client_vat"]')?.value.trim() || '',
                 client_address: form.querySelector('[name="client_address"]')?.value.trim() || '',
-                // Sąskaitos duomenys
-                invoice_number: form.querySelector('[name="invoice_number"]').value.trim(),
-                date: form.querySelector('[name="date"]').value,
+                // Items & totals
                 items: items,
                 subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
                 vat_total: parseFloat(document.getElementById('vat-total').textContent) || 0,
