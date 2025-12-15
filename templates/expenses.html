@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Išlaidos - Mano Startuolis</title>
+    <!-- Auth Check: Redirect to login if not authenticated -->
+    <script>
+        if (!localStorage.getItem('currentUser')) {
+            window.location.href = '/';
+        }
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .category-dot {
@@ -40,17 +46,17 @@
     </style>
 </head>
 <body>
-    <!-- Simple Navigation Bar -->
+    <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container">
-            <a class="navbar-brand" href="/">Mano Startuolis</a>
+            <a class="navbar-brand" href="/dashboard">🚀 Mano Startuolis</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/">Išlaidos</a>
+                        <a class="nav-link active" aria-current="page" href="/expenses">Išlaidos</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/invoices">Sąskaitos</a>
@@ -59,9 +65,22 @@
                         <a class="nav-link" href="/clients">Klientai</a>
                     </li>
                 </ul>
+                <div class="d-flex align-items-center">
+                    <span class="text-muted me-3" id="navbar-user"></span>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="localStorage.removeItem('currentUser'); window.location.href='/';">
+                        🚪 Atsijungti
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
+    <script>
+        // Display current user in navbar
+        const navUser = document.getElementById('navbar-user');
+        if (navUser && localStorage.getItem('currentUser')) {
+            navUser.textContent = '👤 ' + localStorage.getItem('currentUser');
+        }
+    </script>
 
     <div class="container mt-4">
         <!-- Header -->

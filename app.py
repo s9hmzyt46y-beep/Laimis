@@ -62,7 +62,25 @@ client = None
 @app.route('/')
 def index():
     """
-    Main route: directly render the expenses page.
+    Index route - renders login page.
+    Users must log in before accessing the system.
+    """
+    return render_template('login.html')
+
+
+@app.route('/dashboard', methods=['GET'])
+def dashboard():
+    """
+    Dashboard page - main navigation hub after login.
+    Shows cards for Expenses, Invoices, and Clients.
+    """
+    return render_template('dashboard.html')
+
+
+@app.route('/expenses', methods=['GET'])
+def expenses():
+    """
+    Expenses page - AI receipt scanning and expense tracking.
     Frontend uses InstantDB; no server-side expense queries needed.
     """
     return render_template('expenses.html')
@@ -84,6 +102,7 @@ def clients():
     Currently purely front-end (InstantDB or other JS can be used).
     """
     return render_template('clients.html')
+
 
 @app.route('/scan-receipt', methods=['POST'])
 def scan_receipt():

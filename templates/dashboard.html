@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valdymo Panelė - Mano Startuolis</title>
+    <!-- Auth Check: Redirect to login if not authenticated -->
+    <script>
+        if (!localStorage.getItem('currentUser')) {
+            window.location.href = '/';
+        }
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+        }
+        .dashboard-header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .dashboard-header .subtitle {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        .btn-logout {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            height: 100%;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            color: inherit;
+        }
+        .dashboard-card .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        .dashboard-card h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .dashboard-card p {
+            color: #666;
+            margin-bottom: 0;
+            font-size: 14px;
+        }
+        .card-expenses {
+            border-left: 4px solid #28a745;
+        }
+        .card-invoices {
+            border-left: 4px solid #007bff;
+        }
+        .card-clients {
+            border-left: 4px solid #ffc107;
+        }
+        .footer-info {
+            margin-top: 60px;
+            padding: 20px 0;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Sveiki, <span id="user-name">Vartotojau</span>! 👋</h1>
+                    <p class="subtitle">Valdymo panelė - pasirinkite, ką norite daryti</p>
+                </div>
+                <button type="button" class="btn btn-logout" id="logout-btn">
+                    🚪 Atsijungti
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Cards -->
+    <div class="container">
+        <div class="row g-4">
+            <!-- Expenses Card -->
+            <div class="col-md-4">
+                <a href="/expenses" class="dashboard-card card-expenses">
+                    <div class="icon">🧾</div>
+                    <h3>Skenuoti Čekius</h3>
+                    <p>AI automatiškai nuskaito ir kategorizuoja jūsų išlaidas</p>
+                </a>
+            </div>
+
+            <!-- Invoices Card -->
+            <div class="col-md-4">
+                <a href="/invoices" class="dashboard-card card-invoices">
+                    <div class="icon">📄</div>
+                    <h3>Rašyti Sąskaitas</h3>
+                    <p>Kurkite profesionalias sąskaitas faktūras PDF formatu</p>
+                </a>
+            </div>
+
+            <!-- Clients Card -->
+            <div class="col-md-4">
+                <a href="/clients" class="dashboard-card card-clients">
+                    <div class="icon">👥</div>
+                    <h3>Klientų Bazė</h3>
+                    <p>Valdykite savo klientų informaciją vienoje vietoje</p>
+                </a>
+            </div>
+        </div>
+
+        <!-- Quick Stats (placeholder for future) -->
+        <div class="row g-4 mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-4">
+                        <h5 class="text-muted mb-0">💡 Patarimas: Naudokite AI čekių skenavimą, kad sutaupytumėte laiko!</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-info">
+            <p>Mano Startuolis © 2024 | Apskaitos Sistema</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Display username (auth check is in <head>)
+        const currentUser = localStorage.getItem('currentUser');
+        if (currentUser) {
+            document.getElementById('user-name').textContent = currentUser;
+        }
+
+        // Handle logout
+        document.getElementById('logout-btn').addEventListener('click', function() {
+            localStorage.removeItem('currentUser');
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html>
+
