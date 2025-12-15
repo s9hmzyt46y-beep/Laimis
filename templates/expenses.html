@@ -44,7 +44,8 @@
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Išlaidos</h1>
-            <a href="{{ url_for('index') }}" class="btn btn-link">← Grįžti</a>
+            <!-- Standalone page: navigation link disabled to avoid BuildErrors -->
+            <a href="#" class="btn btn-link">← Grįžti</a>
         </div>
         
         <!-- Flash Messages -->
@@ -155,7 +156,8 @@
                             - Flask can access files via request.files
                             - Files can be saved to server
                         #}
-                        <form method="POST" action="{{ url_for('expenses') }}" enctype="multipart/form-data">
+                        <!-- Standalone form: no server POST target, handled client-side / InstantDB -->
+                        <form method="POST" action="#" enctype="multipart/form-data">
                             <!-- Date Input -->
                             <div class="mb-3">
                                 <label for="date" class="form-label">Data <span class="text-danger">*</span></label>

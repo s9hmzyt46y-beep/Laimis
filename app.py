@@ -62,24 +62,10 @@ client = None
 @app.route('/')
 def index():
     """
-    Home page route - Main Dashboard.
-    Simplified for serverless: no database queries, just render template.
-    Frontend handles all data via InstantDB.
-    """
-    return render_template('index.html',
-                         total_income=0.0,
-                         total_expenses=0.0,
-                         net_profit=0.0)
-
-
-@app.route('/islaidos', methods=['GET'])
-def expenses():
-    """
-    Route to display expenses page.
+    Main route: directly render the expenses page.
     Frontend uses InstantDB; no server-side expense queries needed.
     """
     return render_template('expenses.html')
-
 
 @app.route('/scan-receipt', methods=['POST'])
 def scan_receipt():
