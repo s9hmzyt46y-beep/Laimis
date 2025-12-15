@@ -536,8 +536,43 @@
         }
         
         /**
+         * Compress single image before upload
+         */
+        async function compressSingleImage(file, maxWidth = 1200, quality = 0.7) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                img.onload = function() {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    canvas.toBlob(
+                        (blob) => blob ? resolve(blob) : reject(new Error('Compression failed')),
+                        'image/jpeg',
+                        quality
+                    );
+                };
+                
+                img.onerror = () => reject(new Error('Image load failed'));
+                img.src = URL.createObjectURL(file);
+            });
+        }
+        
+        /**
          * Handle AI scan button click
          * FIXED: Now properly handles backend response format { filename, items: [...] }
+         * ADDED: Client-side image compression to avoid 413 errors
          */
         scanBtn.addEventListener('click', async function() {
             // Check if file is selected
@@ -557,12 +592,27 @@
             
             // Change button to loading state
             setButtonState('loading');
-            showStatus('🔍 AI analizuoja čekį... Palaukite.', 'info');
+            showStatus('🔍 Ruošiamas vaizdas...', 'info');
             
             try {
+                // Compress image if it's too large (over 1MB) and not PDF
+                let fileToUpload = file;
+                if (file.size > 1024 * 1024 && !file.type.includes('pdf')) {
+                    showStatus('📦 Suspaudžiamas vaizdas...', 'info');
+                    try {
+                        const compressedBlob = await compressSingleImage(file, 1200, 0.7);
+                        fileToUpload = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                        console.log(`Compressed: ${(file.size / 1024).toFixed(1)}KB → ${(fileToUpload.size / 1024).toFixed(1)}KB`);
+                    } catch (compressError) {
+                        console.warn('Compression failed, using original:', compressError);
+                    }
+                }
+                
+                showStatus('🔍 AI analizuoja čekį... Palaukite.', 'info');
+                
                 // Create FormData to send file
                 const formData = new FormData();
-                formData.append('file', file);
+                formData.append('file', fileToUpload);
                 
                 // Send request to backend
                 const response = await fetch('/scan-receipt', {
@@ -570,10 +620,29 @@
                     body: formData
                 });
                 
-                // Check if response is OK
+                // Check if response is OK with proper error handling
                 if (!response.ok) {
-                    let errorData = await response.json();
-                    const errorMsg = errorData.error || 'Serverio klaida';
+                    let errorMsg = `HTTP ${response.status}`;
+                    
+                    if (response.status === 413) {
+                        errorMsg = 'Failas per didelis. Bandykite mažesnį failą arba nufotografuokite iš arčiau.';
+                    } else if (response.status === 504) {
+                        errorMsg = 'Serverio laikas baigėsi. Bandykite dar kartą.';
+                    } else {
+                        try {
+                            const contentType = response.headers.get('content-type');
+                            if (contentType && contentType.includes('application/json')) {
+                                const errorData = await response.json();
+                                errorMsg = errorData.error || errorMsg;
+                            } else {
+                                const textError = await response.text();
+                                errorMsg = textError.substring(0, 100) || errorMsg;
+                            }
+                        } catch (parseError) {
+                            console.warn('Could not parse error response');
+                        }
+                    }
+                    
                     alert("KLAIDA: " + errorMsg);
                     showStatus('❌ ' + errorMsg, 'error');
                     setButtonState('idle');
@@ -876,6 +945,55 @@
         }
         
         /**
+         * Compress image before upload (client-side)
+         * Reduces image size to avoid Vercel 4.5MB limit
+         * @param {File} file - Original file
+         * @param {number} maxWidth - Max width in pixels
+         * @param {number} quality - JPEG quality (0-1)
+         * @returns {Promise<Blob>} - Compressed image blob
+         */
+        async function compressImage(file, maxWidth = 1200, quality = 0.7) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                img.onload = function() {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // Calculate new dimensions
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    // Draw and compress
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                console.log(`Compressed: ${(file.size / 1024).toFixed(1)}KB → ${(blob.size / 1024).toFixed(1)}KB`);
+                                resolve(blob);
+                            } else {
+                                reject(new Error('Nepavyko suspausti vaizdo'));
+                            }
+                        },
+                        'image/jpeg',
+                        quality
+                    );
+                };
+                
+                img.onerror = () => reject(new Error('Nepavyko įkelti vaizdo'));
+                img.src = URL.createObjectURL(file);
+            });
+        }
+        
+        /**
          * Handle bulk scan button click
          */
         scanBulkBtn.addEventListener('click', async function() {
@@ -907,11 +1025,25 @@
                 // Process files sequentially (to avoid overwhelming the server)
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
+                    showBulkStatus(`Apdorojamas failas ${i + 1} iš ${files.length}: ${file.name}`, 'info');
+                    
+                    // Compress image if too large (over 1MB)
+                    let fileToUpload = file;
+                    if (file.size > 1024 * 1024) {
+                        showBulkStatus(`Suspaudžiamas ${file.name}...`, 'info');
+                        try {
+                            const compressedBlob = await compressImage(file, 1200, 0.7);
+                            fileToUpload = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                        } catch (compressError) {
+                            console.warn('Compression failed, using original:', compressError);
+                        }
+                    }
+                    
                     showBulkStatus(`Skenuojama failas ${i + 1} iš ${files.length}: ${file.name}`, 'info');
                     
-                    // Create FormData
+                    // Create FormData with compressed file
                     const formData = new FormData();
-                    formData.append('file', file);
+                    formData.append('file', fileToUpload);
                     
                     // Send to backend
                     const response = await fetch('/scan-receipt', {
@@ -919,10 +1051,33 @@
                         body: formData
                     });
                     
+                    // Handle error responses properly
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error(`Error scanning ${file.name}:`, errorData);
-                        showBulkStatus(`Klaida skenuojant ${file.name}: ${errorData.error}`, 'error');
+                        let errorMsg = `HTTP ${response.status}`;
+                        
+                        // Check for specific HTTP errors
+                        if (response.status === 413) {
+                            errorMsg = 'Failas per didelis. Bandykite mažesnį failą.';
+                        } else if (response.status === 504) {
+                            errorMsg = 'Serverio laikas baigėsi. Bandykite dar kartą.';
+                        } else {
+                            // Try to parse error as JSON
+                            try {
+                                const contentType = response.headers.get('content-type');
+                                if (contentType && contentType.includes('application/json')) {
+                                    const errorData = await response.json();
+                                    errorMsg = errorData.error || errorMsg;
+                                } else {
+                                    const textError = await response.text();
+                                    errorMsg = textError.substring(0, 100) || errorMsg;
+                                }
+                            } catch (parseError) {
+                                console.warn('Could not parse error response');
+                            }
+                        }
+                        
+                        console.error(`Error scanning ${file.name}:`, errorMsg);
+                        showBulkStatus(`Klaida skenuojant ${file.name}: ${errorMsg}`, 'error');
                         continue; // Skip to next file
                     }
                     
