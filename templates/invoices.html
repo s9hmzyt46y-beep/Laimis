@@ -310,8 +310,8 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        // Generate PDF
-        async function generatePDF(invoiceData = null) {
+        // Generate PDF - exposed globally
+        window.generatePDF = async function(invoiceData = null) {
             const data = invoiceData || getInvoiceData();
             
             if (!data.client_name || !data.invoice_number || !data.date) {
@@ -354,7 +354,7 @@
             }
         }
 
-        document.getElementById('generate-pdf-btn').addEventListener('click', () => generatePDF());
+        document.getElementById('generate-pdf-btn').addEventListener('click', () => window.generatePDF());
     </script>
 
     <!-- InstantDB integration -->
@@ -474,7 +474,11 @@
 
         // Save invoice
         window.saveInvoice = async function() {
-            const data = window.getInvoiceData ? getInvoiceData() : null;
+            // Check if user is logged in
+            if (!window.currentUser || !window.currentUser.id) {
+                alert('Klaida: Vartotojas neprisijungęs!');
+                return;
+            }
             
             // Get form data directly
             const form = document.getElementById('invoice-form');
@@ -505,6 +509,11 @@
                 alert('Užpildykite visus laukus!');
                 return;
             }
+            
+            if (items.length === 0) {
+                alert('Pridėkite bent vieną prekę/paslaugą!');
+                return;
+            }
 
             const btn = document.getElementById('save-invoice-btn');
             btn.disabled = true;
@@ -512,12 +521,14 @@
 
             try {
                 const editingId = document.getElementById('editing-invoice-id').value;
-                const invoiceId = editingId || id();
+                const invoiceId = editingId || window.id();
 
-                await db.transact([
-                    tx.invoices[invoiceId].update({
+                console.log('Saving invoice:', invoiceId, invoiceData);
+
+                await window.db.transact([
+                    window.tx.invoices[invoiceId].update({
                         ...invoiceData,
-                        userId: currentUserId,
+                        userId: window.currentUser.id,
                         updatedAt: new Date().toISOString()
                     })
                 ]);
@@ -526,7 +537,7 @@
                 window.clearInvoiceForm();
             } catch (e) {
                 console.error('Save error:', e);
-                alert('Klaida: ' + e.message);
+                alert('Klaida saugant: ' + (e.message || 'nežinoma klaida'));
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '💾 Išsaugoti sąskaitą';
@@ -596,7 +607,7 @@
         window.downloadInvoicePdf = async function(invoiceId) {
             const invoice = window.allInvoices?.find(i => i.id === invoiceId);
             if (!invoice) return;
-            await generatePDF(invoice);
+            await window.generatePDF(invoice);
         };
 
         // Delete invoice
@@ -604,7 +615,7 @@
             if (!confirm('Ar tikrai norite ištrinti šią sąskaitą?')) return;
             
             try {
-                await db.transact([tx.invoices[invoiceId].delete()]);
+                await window.db.transact([window.tx.invoices[invoiceId].delete()]);
                 alert('✅ Sąskaita ištrinta!');
             } catch (e) {
                 console.error('Delete error:', e);
