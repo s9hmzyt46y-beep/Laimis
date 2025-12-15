@@ -216,14 +216,15 @@
                                 <label for="category" class="form-label">Kategorija <span class="text-danger">*</span></label>
                                 <select class="form-select" id="category" name="category" required>
                                     <option value="">-- Pasirinkite kategoriją --</option>
-                                    <option value="Maistas">Maistas</option>
-                                    <option value="Transportas">Transportas</option>
-                                    <option value="Nuoma">Nuoma</option>
-                                    <option value="Komunaliniai">Komunaliniai</option>
-                                    <option value="Biuras">Biuras</option>
-                                    <option value="Švara">Švara</option>
-                                    <option value="Paslaugos">Paslaugos</option>
-                                    <option value="Kiti">Kiti</option>
+                                    <option value="Maistas">🍕 Maistas</option>
+                                    <option value="Transportas">🚗 Transportas</option>
+                                    <option value="Nuoma">🏠 Nuoma</option>
+                                    <option value="Komunaliniai">💡 Komunaliniai</option>
+                                    <option value="Biuras">📎 Biuras</option>
+                                    <option value="Švara">🧹 Švara</option>
+                                    <option value="Buitinė chemija">🧴 Buitinė chemija</option>
+                                    <option value="Paslaugos">🔧 Paslaugos</option>
+                                    <option value="Kiti">📦 Kiti</option>
                                 </select>
                             </div>
                             
@@ -476,6 +477,7 @@
         
         /**
          * Handle AI scan button click
+         * FIXED: Now properly handles backend response format { filename, items: [...] }
          */
         scanBtn.addEventListener('click', async function() {
             // Check if file is selected
@@ -487,20 +489,20 @@
             const file = fileInput.files[0];
             
             // Validate file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
             if (!allowedTypes.includes(file.type)) {
-                alert('Netinkamas failo formatas! Leidžiami formatai: JPG, PNG, GIF, WEBP');
+                alert('Netinkamas failo formatas! Leidžiami formatai: JPG, PNG, PDF');
                 return;
             }
             
             // Change button to loading state
             setButtonState('loading');
-            showStatus('Skenuojama... Palaukite.', 'info');
+            showStatus('🔍 AI analizuoja čekį... Palaukite.', 'info');
             
             try {
                 // Create FormData to send file
                 const formData = new FormData();
-                formData.append('file', file);  // Note: route expects 'file', not 'image'
+                formData.append('file', file);
                 
                 // Send request to backend
                 const response = await fetch('/scan-receipt', {
@@ -508,99 +510,96 @@
                     body: formData
                 });
                 
-                // Check if response is OK - CRITICAL for error debugging
+                // Check if response is OK
                 if (!response.ok) {
                     let errorData = await response.json();
-                    const errorMsg = errorData.error || 'Nežinoma klaida';
+                    const errorMsg = errorData.error || 'Serverio klaida';
                     alert("KLAIDA: " + errorMsg);
-                    showStatus('Klaida: ' + errorMsg, 'error');
-                    setButtonState('idle');  // Reset to original state
+                    showStatus('❌ ' + errorMsg, 'error');
+                    setButtonState('idle');
                     return;
                 }
                 
                 // Parse JSON response
                 const data = await response.json();
+                console.log("AI RESPONSE:", data);
                 
-                // Logging: Debug AI response data
-                console.log("AI DATA:", data);
+                // Handle backend format: { filename, items: [...] }
+                let item = null;
                 
-                // Check if request was successful
-                // Note: Simplified route returns data directly, not wrapped in success/data
-                if (data.vendor || data.date || data.amount) {
-                    // Robustly fill the fields
-                    if (data.vendor) {
-                        const vendorField = document.querySelector('[name="vendor"]');
-                        if (vendorField) {
-                            vendorField.value = data.vendor;
-                            vendorField.style.backgroundColor = '#fff3cd';
-                            setTimeout(() => vendorField.style.backgroundColor = '', 2000);
-                        }
+                if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+                    // Backend returns items array - use first item for single form
+                    item = data.items[0];
+                    
+                    // If multiple items, calculate totals
+                    if (data.items.length > 1) {
+                        let totalAmount = 0;
+                        data.items.forEach(i => {
+                            totalAmount += parseFloat(i.amount || i.total_amount || 0);
+                        });
+                        item.amount = totalAmount;
+                        showStatus(`✅ Rastos ${data.items.length} eilutės, bendra suma: ${totalAmount.toFixed(2)} €`, 'success');
+                    }
+                } else if (data.vendor || data.date || data.amount) {
+                    // Direct format (legacy support)
+                    item = data;
+                }
+                
+                if (item) {
+                    // Fill vendor
+                    const vendorField = document.querySelector('[name="vendor"]');
+                    if (vendorField && item.vendor) {
+                        vendorField.value = item.vendor;
+                        vendorField.style.backgroundColor = '#d4edda';
+                        setTimeout(() => vendorField.style.backgroundColor = '', 2000);
                     }
                     
-                    if (data.amount) {
-                        const amountField = document.querySelector('[name="amount"]');
-                        if (amountField) {
-                            const numAmount = parseFloat(data.amount);
-                            if (!isNaN(numAmount)) {
-                                amountField.value = numAmount.toFixed(2);
-                            } else {
-                                amountField.value = data.amount;
-                            }
-                            amountField.style.backgroundColor = '#fff3cd';
-                            setTimeout(() => amountField.style.backgroundColor = '', 2000);
-                        }
+                    // Fill amount (prefer amount, fallback to total_amount)
+                    const amountField = document.querySelector('[name="amount"]');
+                    const amountValue = item.amount || item.total_amount || 0;
+                    if (amountField && amountValue) {
+                        amountField.value = parseFloat(amountValue).toFixed(2);
+                        amountField.style.backgroundColor = '#d4edda';
+                        setTimeout(() => amountField.style.backgroundColor = '', 2000);
                     }
                     
-                    if (data.date) {
-                        const dateField = document.querySelector('[name="date"]');
-                        if (dateField) {
-                            dateField.value = data.date;
-                            dateField.style.backgroundColor = '#fff3cd';
-                            setTimeout(() => dateField.style.backgroundColor = '', 2000);
-                        }
+                    // Fill date
+                    const dateField = document.querySelector('[name="date"]');
+                    if (dateField && item.date) {
+                        dateField.value = item.date;
+                        dateField.style.backgroundColor = '#d4edda';
+                        setTimeout(() => dateField.style.backgroundColor = '', 2000);
                     }
                     
-                    if (data.category) {
-                        const categoryField = document.querySelector('[name="category"]');
-                        if (categoryField) {
-                            categoryField.value = data.category;
-                            categoryField.style.backgroundColor = '#fff3cd';
-                            setTimeout(() => categoryField.style.backgroundColor = '', 2000);
-                        }
+                    // Fill category
+                    const categoryField = document.querySelector('[name="category"]');
+                    if (categoryField && item.category) {
+                        categoryField.value = item.category;
+                        categoryField.style.backgroundColor = '#d4edda';
+                        setTimeout(() => categoryField.style.backgroundColor = '', 2000);
                     }
                     
-                    // Also call fillForm for additional visual feedback
-                    fillForm(data);
-                    
-                    // Show success message
-                    showStatus('Duomenys sėkmingai išgauti ir užpildyti!', 'success');
-                    
-                    // Change button to success state
+                    // Show success
+                    if (data.items && data.items.length === 1) {
+                        showStatus(`✅ Duomenys išgauti! Kategorija: ${item.category || 'Kiti'}`, 'success');
+                    }
                     setButtonState('success');
                     
-                    // Re-enable button after 2 seconds
                     setTimeout(() => {
                         setButtonState('idle');
-                        hideStatus();
-                    }, 2000);
-                } else if (result.error) {
-                    // Error in response
-                    alert("KLAIDA: " + result.error);
-                    showStatus(result.error, 'error');
-                    setButtonState('idle');  // Reset to original state
+                    }, 3000);
+                    
                 } else {
-                    // Unexpected response format
-                    alert("KLAIDA: Nepavyko išgauti duomenų iš čekio");
-                    showStatus('Nepavyko išgauti duomenų iš čekio', 'error');
-                    setButtonState('idle');  // Reset to original state
+                    showStatus('❌ Nepavyko išgauti duomenų iš čekio', 'error');
+                    alert("AI negalėjo atpažinti čekio. Bandykite aiškesnę nuotrauką.");
+                    setButtonState('idle');
                 }
+                
             } catch (error) {
-                // Handle network or other errors
                 console.error('Scan error:', error);
-                const errorMsg = error.message || 'Nepavyko susisiekti su serveriu';
-                showStatus('Klaida siunčiant užklausą. Patikrinkite interneto ryšį.', 'error');
-                alert("KLAIDA: " + errorMsg);
-                setButtonState('idle');  // Reset to original state
+                showStatus('❌ Tinklo klaida: ' + (error.message || 'nežinoma'), 'error');
+                alert("KLAIDA: " + (error.message || 'Nepavyko susisiekti su serveriu'));
+                setButtonState('idle');
             }
         });
         
@@ -629,8 +628,8 @@
         const saveAllBtn = document.getElementById('saveAllBtn');
         const clearStagingBtn = document.getElementById('clearStagingBtn');
         
-        // Valid categories for dropdown
-        const validCategories = ['Maistas', 'Transportas', 'Nuoma', 'Komunaliniai', 'Biuras', 'Švara', 'Paslaugos', 'Kiti'];
+        // Valid categories for dropdown - MUST MATCH BACKEND
+        const validCategories = ['Maistas', 'Transportas', 'Nuoma', 'Komunaliniai', 'Biuras', 'Švara', 'Buitinė chemija', 'Paslaugos', 'Kiti'];
         
         /**
          * Show status message for bulk scanning

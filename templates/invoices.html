@@ -4,28 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sąskaitos - Mano Startuolis</title>
-    <!-- Auth is handled by InstantDB subscribeAuth in the module script below -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .vat-summary { background: #f8f9fa; border-radius: 8px; padding: 15px; }
+        .vat-summary .row { margin-bottom: 5px; }
+        .total-row { font-weight: bold; font-size: 1.1em; border-top: 2px solid #dee2e6; padding-top: 10px; margin-top: 10px; }
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container">
             <a class="navbar-brand" href="/dashboard">🚀 Mano Startuolis</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/expenses">Išlaidos</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/invoices">Sąskaitos</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/clients">Klientai</a>
-                    </li>
+                    <li class="nav-item"><a class="nav-link" href="/expenses">Išlaidos</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/invoices">Sąskaitos</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/clients">Klientai</a></li>
                 </ul>
                 <div class="d-flex align-items-center">
                     <span class="text-muted me-3" id="navbar-user"></span>
@@ -36,48 +34,63 @@
             </div>
         </div>
     </nav>
-    <!-- User display is handled by InstantDB subscribeAuth below -->
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Sąskaitos</h1>
+            <h1>📄 Sąskaitos faktūros</h1>
         </div>
 
         <!-- New Invoice Form -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Nauja sąskaita</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Nauja sąskaita faktūra</h5>
             </div>
             <div class="card-body">
                 <form id="invoice-form">
+                    <!-- Client & Invoice Info -->
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Klientas</label>
                             <select id="clientSelect" class="form-select mb-2">
                                 <option value="">--- Pasirinkti klientą ---</option>
                             </select>
-                            <input type="text" class="form-control" name="client_name" placeholder="Kliento vardas" required>
+                            <input type="text" class="form-control" name="client_name" placeholder="Kliento pavadinimas" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Sąskaitos numeris</label>
-                            <input type="text" class="form-control" name="invoice_number" required>
+                            <input type="text" class="form-control" name="invoice_number" placeholder="SF-001" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Data</label>
                             <input type="date" class="form-control" name="date" required>
                         </div>
                     </div>
+                    
+                    <!-- VAT Rate Selection -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">PVM tarifas</label>
+                            <select id="vatRate" class="form-select">
+                                <option value="21">21% (standartinis)</option>
+                                <option value="9">9% (maistas, knygas)</option>
+                                <option value="5">5% (vaistai)</option>
+                                <option value="0">0% (be PVM)</option>
+                            </select>
+                        </div>
+                    </div>
 
-                    <!-- Items Table -->
+                    <!-- Items Table with VAT -->
                     <div class="table-responsive mb-3">
                         <table class="table table-bordered align-middle" id="items-table">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Aprašymas</th>
-                                    <th style="width: 100px;">Kiekis</th>
-                                    <th style="width: 140px;">Kaina (€)</th>
-                                    <th style="width: 140px;">Suma (€)</th>
-                                    <th style="width: 80px;">Veiksmai</th>
+                                    <th style="width: 35%;">Aprašymas</th>
+                                    <th style="width: 10%;">Kiekis</th>
+                                    <th style="width: 15%;">Kaina be PVM (€)</th>
+                                    <th style="width: 10%;">PVM %</th>
+                                    <th style="width: 15%;">PVM suma (€)</th>
+                                    <th style="width: 15%;">Suma su PVM (€)</th>
+                                    <th style="width: 5%;">🗑️</th>
                                 </tr>
                             </thead>
                             <tbody id="items-body">
@@ -88,26 +101,33 @@
 
                     <button type="button" class="btn btn-outline-primary mb-3" id="add-item-btn">+ Pridėti eilutę</button>
 
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>Bendra suma:</strong>
-                            <span id="invoice-total">0.00</span> €
+                    <!-- VAT Summary -->
+                    <div class="row">
+                        <div class="col-md-6"></div>
+                        <div class="col-md-6">
+                            <div class="vat-summary">
+                                <div class="row">
+                                    <div class="col-7">Suma be PVM:</div>
+                                    <div class="col-5 text-end"><span id="subtotal">0.00</span> €</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-7">PVM suma:</div>
+                                    <div class="col-5 text-end"><span id="vat-total">0.00</span> €</div>
+                                </div>
+                                <div class="row total-row">
+                                    <div class="col-7">Bendra suma su PVM:</div>
+                                    <div class="col-5 text-end"><span id="invoice-total">0.00</span> €</div>
+                                </div>
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-success" id="generate-pdf-btn">
-                            📄 Generuoti PDF
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-4">
+                        <button type="button" class="btn btn-success btn-lg" id="generate-pdf-btn">
+                            📄 Generuoti PDF sąskaitą
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-
-        <!-- Placeholder for future invoices list (could be powered by InstantDB) -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Sąskaitų sąrašas</h5>
-            </div>
-            <div class="card-body">
-                <p class="text-muted mb-0">Čia ateityje galėsime rodyti sąskaitų sąrašą iš InstantDB.</p>
             </div>
         </div>
     </div>
@@ -115,45 +135,49 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // Dynamic items table logic
+        // DOM Elements
         const itemsBody = document.getElementById('items-body');
         const addItemBtn = document.getElementById('add-item-btn');
+        const vatRateSelect = document.getElementById('vatRate');
+        const subtotalEl = document.getElementById('subtotal');
+        const vatTotalEl = document.getElementById('vat-total');
         const invoiceTotalEl = document.getElementById('invoice-total');
-        const clientSelectEl = document.getElementById('clientSelect');
 
-        // Will be filled from InstantDB (clients)
-        window.invoiceClients = [];
+        // Get current VAT rate
+        function getVatRate() {
+            return parseFloat(vatRateSelect.value) || 21;
+        }
 
-        function recalcTotal() {
+        // Recalculate all totals
+        function recalcTotals() {
+            let subtotal = 0;
+            let vatTotal = 0;
             let total = 0;
+
             itemsBody.querySelectorAll('tr').forEach(row => {
+                const netInput = row.querySelector('[name="item_net"]');
+                const vatAmountInput = row.querySelector('[name="item_vat_amount"]');
                 const totalInput = row.querySelector('[name="item_total"]');
-                const val = parseFloat(totalInput.value) || 0;
-                total += val;
+
+                const net = parseFloat(netInput?.value) || 0;
+                const vatAmount = parseFloat(vatAmountInput?.value) || 0;
+                const rowTotal = parseFloat(totalInput?.value) || 0;
+
+                subtotal += net;
+                vatTotal += vatAmount;
+                total += rowTotal;
             });
+
+            subtotalEl.textContent = subtotal.toFixed(2);
+            vatTotalEl.textContent = vatTotal.toFixed(2);
             invoiceTotalEl.textContent = total.toFixed(2);
         }
 
-        function attachRowEvents(row) {
-            const qtyInput = row.querySelector('[name="item_qty"]');
-            const priceInput = row.querySelector('[name="item_price"]');
-            const totalInput = row.querySelector('[name="item_total"]');
-
-            function updateRowTotal() {
-                const qty = parseFloat(qtyInput.value) || 0;
-                const price = parseFloat(priceInput.value) || 0;
-                const rowTotal = qty * price;
-                totalInput.value = rowTotal.toFixed(2);
-                recalcTotal();
-            }
-
-            qtyInput.addEventListener('input', updateRowTotal);
-            priceInput.addEventListener('input', updateRowTotal);
-        }
-
-        // Public function to add a new item row
+        // Add item row
         function addItem() {
             const row = document.createElement('tr');
+            const vatRate = getVatRate();
+            
             row.innerHTML = `
                 <td>
                     <input type="text" class="form-control form-control-sm" name="item_description" placeholder="Prekė / paslauga" required>
@@ -162,33 +186,75 @@
                     <input type="number" class="form-control form-control-sm" name="item_qty" min="1" step="1" value="1" required>
                 </td>
                 <td>
-                    <input type="number" class="form-control form-control-sm" name="item_price" min="0" step="0.01" value="0.00" required>
+                    <input type="number" class="form-control form-control-sm" name="item_net" min="0" step="0.01" value="0.00" required>
                 </td>
                 <td>
-                    <input type="number" class="form-control form-control-sm" name="item_total" min="0" step="0.01" value="0.00" readonly>
+                    <input type="number" class="form-control form-control-sm" name="item_vat_rate" min="0" max="100" step="1" value="${vatRate}" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="item_vat_amount" min="0" step="0.01" value="0.00" readonly style="background:#f8f9fa;">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="item_total" min="0" step="0.01" value="0.00" readonly style="background:#e9ecef; font-weight:bold;">
                 </td>
                 <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-danger remove-item-btn">🗑️</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">✕</button>
                 </td>
             `;
+            
             itemsBody.appendChild(row);
-
-            // Attach behaviour
             attachRowEvents(row);
+        }
 
-            // Remove button
-            row.querySelector('.remove-item-btn').addEventListener('click', () => {
+        // Attach calculation events to row
+        function attachRowEvents(row) {
+            const qtyInput = row.querySelector('[name="item_qty"]');
+            const netInput = row.querySelector('[name="item_net"]');
+            const vatRateInput = row.querySelector('[name="item_vat_rate"]');
+            const vatAmountInput = row.querySelector('[name="item_vat_amount"]');
+            const totalInput = row.querySelector('[name="item_total"]');
+            const removeBtn = row.querySelector('.remove-item-btn');
+
+            function updateRow() {
+                const qty = parseFloat(qtyInput.value) || 0;
+                const netPrice = parseFloat(netInput.value) || 0;
+                const vatRate = parseFloat(vatRateInput.value) || 0;
+
+                const lineNet = qty * netPrice;
+                const lineVat = lineNet * (vatRate / 100);
+                const lineTotal = lineNet + lineVat;
+
+                vatAmountInput.value = lineVat.toFixed(2);
+                totalInput.value = lineTotal.toFixed(2);
+                recalcTotals();
+            }
+
+            qtyInput.addEventListener('input', updateRow);
+            netInput.addEventListener('input', updateRow);
+            vatRateInput.addEventListener('input', updateRow);
+
+            removeBtn.addEventListener('click', () => {
                 row.remove();
-                recalcTotal();
+                recalcTotals();
             });
         }
 
-        // Wire button to addItem()
+        // Update VAT rate for all rows when global rate changes
+        vatRateSelect.addEventListener('change', () => {
+            const newRate = getVatRate();
+            itemsBody.querySelectorAll('[name="item_vat_rate"]').forEach(input => {
+                input.value = newRate;
+                input.dispatchEvent(new Event('input'));
+            });
+        });
+
+        // Add item button
         addItemBtn.addEventListener('click', addItem);
 
-        // Add initial empty row
+        // Add initial row
         addItem();
 
+        // Generate PDF
         async function generatePDF() {
             const form = document.getElementById('invoice-form');
             const clientName = form.querySelector('[name="client_name"]').value.trim();
@@ -204,11 +270,13 @@
             itemsBody.querySelectorAll('tr').forEach(row => {
                 const description = row.querySelector('[name="item_description"]').value.trim();
                 const qty = parseFloat(row.querySelector('[name="item_qty"]').value) || 0;
-                const price = parseFloat(row.querySelector('[name="item_price"]').value) || 0;
+                const net = parseFloat(row.querySelector('[name="item_net"]').value) || 0;
+                const vatRate = parseFloat(row.querySelector('[name="item_vat_rate"]').value) || 0;
+                const vatAmount = parseFloat(row.querySelector('[name="item_vat_amount"]').value) || 0;
                 const total = parseFloat(row.querySelector('[name="item_total"]').value) || 0;
 
-                if (description && qty > 0 && price >= 0) {
-                    items.push({ description, qty, price, total });
+                if (description && qty > 0) {
+                    items.push({ description, qty, net, vatRate, vatAmount, total });
                 }
             });
 
@@ -221,24 +289,25 @@
                 client_name: clientName,
                 invoice_number: invoiceNumber,
                 date: date,
-                items: items
+                items: items,
+                subtotal: parseFloat(subtotalEl.textContent) || 0,
+                vat_total: parseFloat(vatTotalEl.textContent) || 0,
+                total: parseFloat(invoiceTotalEl.textContent) || 0
             };
 
             try {
+                document.getElementById('generate-pdf-btn').disabled = true;
+                document.getElementById('generate-pdf-btn').innerHTML = '⏳ Generuojama...';
+
                 const response = await fetch('/api/generate-pdf', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
                     let errText = 'Nežinoma klaida';
-                    try {
-                        const errData = await response.json();
-                        errText = errData.error || errText;
-                    } catch (_) {}
+                    try { const errData = await response.json(); errText = errData.error || errText; } catch (_) {}
                     alert('Klaida generuojant PDF: ' + errText);
                     return;
                 }
@@ -247,118 +316,84 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = (invoiceNumber || 'invoice') + '.pdf';
+                a.download = (invoiceNumber || 'saskaita') + '.pdf';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
                 window.URL.revokeObjectURL(url);
+
             } catch (error) {
                 console.error('PDF generation error:', error);
                 alert('Nepavyko sugeneruoti PDF: ' + (error.message || 'nežinoma klaida'));
+            } finally {
+                document.getElementById('generate-pdf-btn').disabled = false;
+                document.getElementById('generate-pdf-btn').innerHTML = '📄 Generuoti PDF sąskaitą';
             }
         }
 
         document.getElementById('generate-pdf-btn').addEventListener('click', generatePDF);
     </script>
 
-    <!-- InstantDB integration with User Data Isolation -->
+    <!-- InstantDB integration -->
     <script type="module">
-      import { init, tx, id } from 'https://esm.sh/@instantdb/core';
+        import { init, tx, id } from 'https://esm.sh/@instantdb/core';
 
-      const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
+        const APP_ID = 'ad4539a9-2114-44bb-a2f4-524d57448deb';
 
-      let db;
-      try {
-          db = init({ appId: APP_ID });
-          window.db = db;
-          window.tx = tx;
-          window.id = id;
-          console.log("✅ InstantDB (invoices) prisijungė");
-      } catch (e) {
-          console.error("Klaida jungiantis prie InstantDB (invoices):", e);
-      }
+        let db;
+        try {
+            db = init({ appId: APP_ID });
+            window.db = db;
+            console.log("✅ InstantDB (invoices) prisijungė");
+        } catch (e) {
+            console.error("InstantDB error:", e);
+        }
 
-      // Auth check and data loading
-      if (db) {
-          db.subscribeAuth((auth) => {
-              if (!auth.user) {
-                  console.log("Not authenticated, redirecting to login");
-                  window.location.href = '/';
-              } else {
-                  window.currentUser = auth.user;
-                  console.log("✅ Authenticated as:", auth.user.email);
-                  
-                  // Update navbar with user email
-                  const navUser = document.getElementById('navbar-user');
-                  if (navUser) navUser.textContent = '👤 ' + auth.user.email;
-                  
-                  // Load clients filtered by userId (for dropdown)
-                  loadClientsForInvoices(auth.user.id);
-              }
-          });
-      }
+        if (db) {
+            db.subscribeAuth((auth) => {
+                if (!auth.user) {
+                    window.location.href = '/';
+                } else {
+                    window.currentUser = auth.user;
+                    const navUser = document.getElementById('navbar-user');
+                    if (navUser) navUser.textContent = '👤 ' + auth.user.email;
+                    loadClientsForInvoices(auth.user.id);
+                }
+            });
+        }
 
-      // Load clients filtered by userId
-      function loadClientsForInvoices(userId) {
-          db.subscribeQuery({ 
-              clients: { 
-                  $: { where: { userId: userId } } 
-              } 
-          }, (resp) => {
-              if (resp.error) {
-                  console.error("Klaida gaunant klientus:", resp.error);
-                  return;
-              }
-              const clients = resp.data.clients || [];
-              window.invoiceClients = clients;
+        function loadClientsForInvoices(userId) {
+            db.subscribeQuery({ clients: { $: { where: { userId: userId } } } }, (resp) => {
+                if (resp.error) return;
+                const clients = resp.data.clients || [];
+                const select = document.getElementById('clientSelect');
+                if (!select) return;
 
-              const select = document.getElementById('clientSelect');
-              if (!select) return;
+                select.innerHTML = '<option value="">--- Pasirinkti klientą ---</option>';
+                clients.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name || '(be pavadinimo)';
+                    select.appendChild(opt);
+                });
 
-              select.innerHTML = '<option value="">--- Pasirinkti klientą ---</option>';
+                select.addEventListener('change', () => {
+                    const client = clients.find(c => c.id === select.value);
+                    if (client) {
+                        document.querySelector('[name="client_name"]').value = client.name || '';
+                    }
+                });
+            });
+        }
 
-              clients.forEach(c => {
-                  const opt = document.createElement('option');
-                  opt.value = c.id;
-                  opt.textContent = c.name || '(be pavadinimo)';
-                  opt.dataset.address = c.address || '';
-                  opt.dataset.code = c.code || '';
-                  opt.dataset.vat = c.vat_code || '';
-                  select.appendChild(opt);
-              });
-
-              // Attach change handler once
-              if (!select.dataset.bound) {
-                  select.addEventListener('change', () => {
-                      const selectedId = select.value;
-                      if (!selectedId) return;
-                      const client = clients.find(c => c.id === selectedId);
-                      const form = document.getElementById('invoice-form');
-                      if (!form || !client) return;
-
-                      const clientNameInput = form.querySelector('[name="client_name"]');
-                      if (clientNameInput) {
-                          clientNameInput.value = client.name || '';
-                      }
-                  });
-                  select.dataset.bound = 'true';
-              }
-          });
-      }
-
-      // Sign out function
-      window.signOut = function() {
-          if (window.db && window.db.auth) {
-              window.db.auth.signOut().then(() => {
-                  localStorage.removeItem('currentUser');
-                  window.location.href = '/';
-              });
-          } else {
-              localStorage.removeItem('currentUser');
-              window.location.href = '/';
-          }
-      };
+        window.signOut = function() {
+            if (window.db?.auth) {
+                window.db.auth.signOut().then(() => {
+                    localStorage.removeItem('currentUser');
+                    window.location.href = '/';
+                });
+            }
+        };
     </script>
 </body>
 </html>
-

@@ -112,7 +112,7 @@ def scan_receipt():
     Supports split categories and bulk processing.
     """
     # Define valid categories - MUST match frontend dropdown options exactly
-    VALID_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Paslaugos", "Kiti"]
+    VALID_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
 
     try:
         print("--- STARTING SCAN ---")
@@ -208,7 +208,7 @@ def scan_receipt():
                 return jsonify({"error": f"Failed to initialize OpenAI client: {str(e)}"}), 500
         
         # STEP 3: Build system prompt for receipt digitization
-        STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Paslaugos", "Kiti"]
+        STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
         
         system_prompt = f"""You are a forensic accounting OCR robot. Your goal is 100% data extraction completeness.
 
@@ -223,12 +223,13 @@ The image has been high-contrast processed. Read distinct lines carefully. Do no
 4. **Categorization**: Assign a category for each item from this EXACT list: {STRICT_CATEGORIES}.
 
 Category rules:
-- Food, drinks, snacks, groceries, restaurants, cafes → 'Maistas'
-- Fuel, gas, parking, car wash, tolls, public transport → 'Transportas'
+- Food, drinks, snacks, groceries, restaurants, cafes, bread, milk, meat → 'Maistas'
+- Fuel, gas, parking, car wash, tolls, public transport, taxi → 'Transportas'
 - Rent, housing payments, lease → 'Nuoma'
 - Utilities, electricity, water, gas bills, internet, phone → 'Komunaliniai'
-- Paper, pens, office supplies, equipment, stationery → 'Biuras'
-- Cleaning supplies, trash bags, detergents, hygiene products → 'Švara'
+- Paper, pens, office supplies, equipment, stationery, printer → 'Biuras'
+- Cleaning services, professional cleaning → 'Švara'
+- Detergents, soap, shampoo, washing powder, dishwasher tablets, cleaning chemicals, hygiene products → 'Buitinė chemija'
 - Services, repairs, consulting, professional services → 'Paslaugos'
 - If unsure or doesn't fit above → 'Kiti'
 
@@ -434,20 +435,26 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
                         'utilities': 'Komunaliniai',
                         'rent': 'Nuoma',
                         'housing': 'Nuoma',
-                        'services': 'Paslaugos'
+                        'services': 'Paslaugos',
+                        'household': 'Buitinė chemija',
+                        'chemicals': 'Buitinė chemija',
+                        'detergent': 'Buitinė chemija',
+                        'soap': 'Buitinė chemija'
                     }
                     
                     matched_category = fallback_map.get(category_lower)
                     
                     # Keyword matching
                     if not matched_category:
-                        if any(keyword in category_lower for keyword in ['food', 'grocer', 'restaurant', 'cafe', 'meal', 'snack']):
+                        if any(keyword in category_lower for keyword in ['food', 'grocer', 'restaurant', 'cafe', 'meal', 'snack', 'bread', 'milk']):
                             matched_category = 'Maistas'
-                        elif any(keyword in category_lower for keyword in ['fuel', 'gas', 'parking', 'transport', 'car']):
+                        elif any(keyword in category_lower for keyword in ['fuel', 'gas', 'parking', 'transport', 'car', 'taxi']):
                             matched_category = 'Transportas'
-                        elif any(keyword in category_lower for keyword in ['clean', 'detergent', 'hygiene']):
+                        elif any(keyword in category_lower for keyword in ['detergent', 'soap', 'shampoo', 'washing', 'chemical', 'hygiene', 'household']):
+                            matched_category = 'Buitinė chemija'
+                        elif any(keyword in category_lower for keyword in ['clean', 'cleaning service']):
                             matched_category = 'Švara'
-                        elif any(keyword in category_lower for keyword in ['office', 'stationery', 'paper', 'pen']):
+                        elif any(keyword in category_lower for keyword in ['office', 'stationery', 'paper', 'pen', 'printer']):
                             matched_category = 'Biuras'
                         elif any(keyword in category_lower for keyword in ['utility', 'electric', 'water', 'internet', 'phone']):
                             matched_category = 'Komunaliniai'
@@ -487,14 +494,17 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
 @app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
     """
-    Serverless PDF generation endpoint using FPDF.
+    Serverless PDF generation endpoint using FPDF with full VAT support.
 
     Expects JSON payload:
       {
         "client_name": "...",
         "invoice_number": "...",
         "date": "YYYY-MM-DD",
-        "items": [{ "description": "...", "qty": 1, "price": 10.0, "total": 10.0 }, ...]
+        "items": [{ "description": "...", "qty": 1, "net": 10.0, "vatRate": 21, "vatAmount": 2.1, "total": 12.1 }, ...],
+        "subtotal": 100.0,
+        "vat_total": 21.0,
+        "total": 121.0
       }
     """
     try:
@@ -506,6 +516,11 @@ def generate_pdf():
         invoice_number = (data.get("invoice_number") or "").strip()
         date_str = (data.get("date") or "").strip()
         items = data.get("items") or []
+        
+        # Get totals from payload (or calculate)
+        subtotal = float(data.get("subtotal") or 0)
+        vat_total = float(data.get("vat_total") or 0)
+        grand_total = float(data.get("total") or 0)
 
         if not client_name or not invoice_number or not date_str:
             return jsonify({"error": "Missing required fields: client_name, invoice_number, date"}), 400
@@ -521,51 +536,88 @@ def generate_pdf():
 
         pdf = FPDF()
         pdf.add_page()
-
-        # NOTE: Default core fonts in FPDF are Latin-1; Lithuanian characters may need UTF-8/TTF setup.
         pdf.set_auto_page_break(auto=True, margin=15)
 
         # Header
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, "SASKAITA FAKTURA", ln=True)
-
-        pdf.set_font("Helvetica", "", 12)
-        pdf.cell(0, 8, f"Saskaitos numeris: {invoice_number}", ln=True)
-        pdf.cell(0, 8, f"Data: {date_str}", ln=True)
-        pdf.cell(0, 8, f"Klientas: {client_name}", ln=True)
+        pdf.set_font("Helvetica", "B", 18)
+        pdf.cell(0, 12, "SASKAITA FAKTURA", ln=True, align="C")
         pdf.ln(5)
 
-        # Table header
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(90, 8, "Aprasymas", border=1)
-        pdf.cell(20, 8, "Kiekis", border=1, align="R")
-        pdf.cell(30, 8, "Kaina", border=1, align="R")
-        pdf.cell(30, 8, "Suma", border=1, align="R")
+        # Invoice info box
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 7, f"Saskaitos Nr.: {invoice_number}", ln=True)
+        pdf.cell(0, 7, f"Data: {date_str}", ln=True)
+        pdf.cell(0, 7, f"Klientas: {client_name}", ln=True)
+        pdf.ln(8)
+
+        # Table header with VAT columns
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(60, 8, "Aprasymas", border=1, fill=True)
+        pdf.cell(15, 8, "Kiekis", border=1, align="C", fill=True)
+        pdf.cell(25, 8, "Kaina be PVM", border=1, align="C", fill=True)
+        pdf.cell(15, 8, "PVM %", border=1, align="C", fill=True)
+        pdf.cell(25, 8, "PVM suma", border=1, align="C", fill=True)
+        pdf.cell(30, 8, "Suma su PVM", border=1, align="C", fill=True)
         pdf.ln()
 
         # Table rows
-        pdf.set_font("Helvetica", "", 11)
-        total_sum = 0.0
+        pdf.set_font("Helvetica", "", 9)
+        calc_subtotal = 0.0
+        calc_vat = 0.0
+        calc_total = 0.0
 
         for item in items:
-            desc = str(item.get("description", ""))[:60]
+            desc = str(item.get("description", ""))[:40]
             qty = float(item.get("qty") or 0)
-            price = float(item.get("price") or 0)
-            total = float(item.get("total") or (qty * price))
-            total_sum += total
+            
+            # Support both old format (price) and new format (net)
+            net = float(item.get("net") or item.get("price") or 0)
+            vat_rate = float(item.get("vatRate") or 21)
+            vat_amount = float(item.get("vatAmount") or (net * qty * vat_rate / 100))
+            total = float(item.get("total") or (net * qty + vat_amount))
+            
+            line_net = net * qty
+            calc_subtotal += line_net
+            calc_vat += vat_amount
+            calc_total += total
 
-            pdf.cell(90, 8, desc, border=1)
-            pdf.cell(20, 8, f"{qty:.2f}", border=1, align="R")
-            pdf.cell(30, 8, f"{price:.2f} €", border=1, align="R")
-            pdf.cell(30, 8, f"{total:.2f} €", border=1, align="R")
+            pdf.cell(60, 7, desc, border=1)
+            pdf.cell(15, 7, f"{qty:.0f}", border=1, align="C")
+            pdf.cell(25, 7, f"{net:.2f} EUR", border=1, align="R")
+            pdf.cell(15, 7, f"{vat_rate:.0f}%", border=1, align="C")
+            pdf.cell(25, 7, f"{vat_amount:.2f} EUR", border=1, align="R")
+            pdf.cell(30, 7, f"{total:.2f} EUR", border=1, align="R")
             pdf.ln()
 
-        # Totals
-        pdf.ln(4)
+        # Use provided totals or calculated ones
+        final_subtotal = subtotal if subtotal > 0 else calc_subtotal
+        final_vat = vat_total if vat_total > 0 else calc_vat
+        final_total = grand_total if grand_total > 0 else calc_total
+
+        # Totals section
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "", 11)
+        
+        # Subtotal
+        pdf.cell(140, 7, "Suma be PVM:", align="R")
+        pdf.cell(30, 7, f"{final_subtotal:.2f} EUR", align="R")
+        pdf.ln()
+        
+        # VAT
+        pdf.cell(140, 7, "PVM suma:", align="R")
+        pdf.cell(30, 7, f"{final_vat:.2f} EUR", align="R")
+        pdf.ln()
+        
+        # Grand Total
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(140, 8, "Bendra suma:", align="R")
-        pdf.cell(30, 8, f"{total_sum:.2f} €", border=0, align="R")
-        pdf.ln(10)
+        pdf.cell(140, 8, "BENDRA SUMA:", align="R")
+        pdf.cell(30, 8, f"{final_total:.2f} EUR", align="R")
+        pdf.ln(15)
+
+        # Footer
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 6, "Dekojame uz bendradarbiavima!", ln=True, align="C")
 
         # Output to bytes (serverless friendly)
         pdf_str = pdf.output(dest="S")
@@ -577,7 +629,7 @@ def generate_pdf():
         buffer = io.BytesIO(pdf_bytes)
         buffer.seek(0)
 
-        filename = f"invoice_{invoice_number}.pdf"
+        filename = f"SF_{invoice_number}.pdf"
         return send_file(
             buffer,
             mimetype="application/pdf",
