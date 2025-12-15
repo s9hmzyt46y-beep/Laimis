@@ -188,8 +188,8 @@
                             - Flask can access files via request.files
                             - Files can be saved to server
                         #}
-                        <!-- Standalone form: no server POST target, handled client-side / InstantDB -->
-                        <form method="POST" action="#" enctype="multipart/form-data">
+                        <!-- Standalone form: client-side only, handled via InstantDB -->
+                        <form id="addExpenseForm" onsubmit="return false;" enctype="multipart/form-data">
                             <!-- Date Input -->
                             <div class="mb-3">
                                 <label for="date" class="form-label">Data <span class="text-danger">*</span></label>
@@ -275,7 +275,7 @@
                             </div>
                             
                             <!-- Submit Button -->
-                            <button type="submit" class="btn btn-primary w-100">Pridėti išlaidą</button>
+                            <button type="button" id="addExpenseBtn" class="btn btn-primary w-100" onclick="saveManualExpense()">Pridėti išlaidą</button>
                         </form>
                     </div>
                 </div>
@@ -1264,6 +1264,60 @@
               renderMainTable(resp.data.expenses);
           });
       }
+
+      // Save manual expense from form (not bulk scan)
+      window.saveManualExpense = async function() {
+          if (!window.currentUser) {
+              alert('Prašome prisijungti!');
+              return;
+          }
+          
+          const dateEl = document.getElementById('date');
+          const vendorEl = document.getElementById('vendor');
+          const categoryEl = document.getElementById('category');
+          const amountEl = document.getElementById('amount');
+          const descriptionEl = document.getElementById('description');
+          
+          // Validate
+          if (!dateEl.value || !vendorEl.value || !categoryEl.value || !amountEl.value) {
+              alert('Užpildykite visus privalomus laukus!');
+              return;
+          }
+          
+          const amount = parseFloat(amountEl.value) || 0;
+          // Calculate VAT (21% standard)
+          const vat = amount - (amount / 1.21);
+          const net = amount - vat;
+          
+          try {
+              const newId = window.id();
+              await window.db.transact([
+                  window.tx.expenses[newId].update({
+                      userId: window.currentUser.id,
+                      date: dateEl.value,
+                      vendor: vendorEl.value,
+                      category: categoryEl.value,
+                      amount: amount,
+                      net: net,
+                      vat: vat,
+                      description: descriptionEl ? descriptionEl.value : '',
+                      createdAt: new Date().toISOString()
+                  })
+              ]);
+              
+              // Clear form
+              dateEl.value = '';
+              vendorEl.value = '';
+              categoryEl.selectedIndex = 0;
+              amountEl.value = '';
+              if (descriptionEl) descriptionEl.value = '';
+              
+              alert('✅ Išlaida išsaugota!');
+          } catch (err) {
+              console.error('Save error:', err);
+              alert('Klaida saugant: ' + err.message);
+          }
+      };
 
       // 4. Render expenses table with statistics
       function renderMainTable(expenses) {
