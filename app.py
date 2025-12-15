@@ -364,9 +364,8 @@ INSTRUKCIJOS:
 ⚠️ KRITIŠKAI SVARBU:
 - description = TIKSLUS čekio tekstas, ne sutrumpinimas
 - Jei čekyje parašyta "DUONA BALTA VILNIAUS 400G" - grąžink tiksliai tai
-- NEGALIMA grąžinti tik "Duona" ar "Pienas" - tai per trumpa!"""
-
-Grąžink JSON su visais produktais."""
+- NEGALIMA grąžinti tik "Duona" ar "Pienas" - tai per trumpa!
+- Grąžink JSON su visais produktais."""
 
         # API Call with JSON response format - using GPT-4o (best vision model)
         print("Calling OpenAI API with GPT-4o...")
