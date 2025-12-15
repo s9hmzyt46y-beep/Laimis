@@ -244,59 +244,88 @@ def scan_receipt():
                 print(f"OpenAI client initialization error: {e}")
                 return jsonify({"error": f"Nepavyko inicializuoti OpenAI: {str(e)}"}), 500
         
-        # STEP 3: Build system prompt for receipt digitization
+        # STEP 3: Build system prompt for Lithuanian receipt digitization
         STRICT_CATEGORIES = ["Maistas", "Transportas", "Nuoma", "Komunaliniai", "Biuras", "Švara", "Buitinė chemija", "Paslaugos", "Kiti"]
         
-        system_prompt = f"""You are a forensic accounting OCR robot. Your goal is 100% data extraction completeness.
+        system_prompt = f"""Esi profesionalus lietuviškų čekių ir sąskaitų skaitymo robotas. Tavo tikslas - 100% tiksliai nuskaityti LIETUVIŠKĄ tekstą.
 
-The image has been preprocessed for optimal OCR. Read all text carefully.
+## SVARBU: Čekiai yra LIETUVIŲ kalba!
 
-1. **EXTRACT EVERY SINGLE LINE ITEM.** Do not skip anything. If a receipt has 50 items, return 50 items.
+### Lietuviški parduotuvių pavadinimai:
+- MAXIMA, IKI, LIDL, RIMI, NORFA - maisto prekių parduotuvės
+- CIRCLE K, VIADA, ORLEN - degalinės
+- SENUKAI, MOKI-VEŽI, ERMITAŽAS - statybinės medžiagos
+- EUROVAISTINĖ, CAMELIA, GINTARINĖ VAISTINĖ - vaistinės
+- TOPO CENTRAS, ELEKTROMARKT, PIGU - elektronika
 
-2. **NO SUMMARIZATION.** Do not group 'Various items'. List them individually.
+### Lietuviški produktų pavadinimai (pavyzdžiai):
+MAISTAS: duona, pienas, sviestas, kiaušiniai, mėsa, vištiena, kiauliena, jautiena, žuvis, lašiša, sūris, varškė, grietinė, jogurtas, kefyras, alus, vynas, sultys, vanduo, kava, arbata, cukrus, druska, miltai, ryžiai, makaronai, bulvės, morkos, svogūnai, pomidorai, agurkai, obuoliai, bananai, apelsinai, saldainiai, šokoladas, ledai, pyragas, bandelės, sumuštinis
 
-3. **Discounts**: If you see a discount line (e.g., -1.50), include it as a separate item with a negative amount, category 'Kiti'.
+BUITINĖ CHEMIJA: skalbimo milteliai, indų ploviklis, grindų valiklis, WC valiklis, dezodorantas, šampūnas, muilas, dantų pasta, tualetinis popierius, servetėlės, skalbimo kapsulės, minkštiklis, baliklis
 
-4. **Categorization**: Assign a category for each item from this EXACT list: {STRICT_CATEGORIES}.
+TRANSPORTAS: degalai, benzinas, dyzelinas, parkavimas, automobilių plovykla, tepalai, aušinimo skystis
 
-Category rules:
-- Food, drinks, snacks, groceries, restaurants, cafes, bread, milk, meat → 'Maistas'
-- Fuel, gas, parking, car wash, tolls, public transport, taxi → 'Transportas'
-- Rent, housing payments, lease → 'Nuoma'
-- Utilities, electricity, water, gas bills, internet, phone → 'Komunaliniai'
-- Paper, pens, office supplies, equipment, stationery, printer → 'Biuras'
-- Cleaning services, professional cleaning → 'Švara'
-- Detergents, soap, shampoo, washing powder, dishwasher tablets, cleaning chemicals, hygiene products → 'Buitinė chemija'
-- Services, repairs, consulting, professional services → 'Paslaugos'
-- If unsure or doesn't fit above → 'Kiti'
+BIURAS: popierius, rašikliai, sąsiuviniai, segtukai, vokai, spausdintuvas, rašalas
 
-5. **Structure**: Return JSON: {{ 'items': [{{vendor, date, description, amount, vat_amount, net_amount, category}}, ...] }}.
+### Kategorijos (naudok TIK šias):
+{STRICT_CATEGORIES}
 
-For EACH item, return:
-- 'vendor' (e.g., 'Maxima', 'Circle K')
-- 'date' (YYYY-MM-DD format)
-- 'description' (Product name or item description - be specific, no grouping)
-- 'amount' (Price WITH VAT/PVM - use total_amount if shown separately)
-- 'vat_amount' (The VAT/PVM portion of the price)
-- 'net_amount' (Price WITHOUT VAT/PVM)
-- 'category' (from the list above)
+### Kategorijų taisyklės:
+- 'Maistas': visi maisto produktai, gėrimai, restoranai, kavinės, barai
+- 'Transportas': degalai, parkavimas, viešasis transportas, taksi, autoservisas
+- 'Nuoma': nuomos mokesčiai, būsto nuoma
+- 'Komunaliniai': elektra, vanduo, dujos, internetas, telefonas, šildymas
+- 'Biuras': kanceliarinės prekės, popierius, spausdintuvai
+- 'Švara': valymo paslaugos, profesionalus valymas
+- 'Buitinė chemija': plovikliai, šampūnai, higienos prekės, valymo priemonės
+- 'Paslaugos': remonto paslaugos, konsultacijos
+- 'Kiti': visa kita, nuolaidos, mokesčiai
 
-Calculation Rule: If VAT is only shown at the bottom summary, calculate the VAT for each item proportionally (usually 21% in Lithuania, or 9% for books/heat).
+### Lietuviški čekių terminai:
+- "VISO" arba "IŠ VISO" = bendra suma
+- "MOKĖTI" = suma mokėjimui
+- "PVM" = pridėtinės vertės mokestis (21% arba 9%)
+- "Suma be PVM" = grynoji suma
+- "Grąža" = grąžinti pinigai
+- "Nuolaida" = discount (neigiama suma)
+- "vnt" arba "vnt." = vienetai
+- "kg" = kilogramai
 
-Example: If Total is 121.00 and VAT is 21.00, then net is 100.00.
+### JSON formatas:
+Grąžink JSON: {{ "items": [{{vendor, date, description, amount, vat_amount, net_amount, category}}, ...] }}
 
-CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegible, return {{"items": []}}."""
+Kiekvienam produktui:
+- 'vendor': parduotuvės pavadinimas (pvz., 'Maxima', 'Lidl', 'Circle K')
+- 'date': data YYYY-MM-DD formatu
+- 'description': produkto pavadinimas LIETUVIŠKAI (tiksliai kaip čekyje)
+- 'amount': kaina SU PVM (bendra suma)
+- 'vat_amount': PVM suma
+- 'net_amount': suma BE PVM
+- 'category': kategorija iš sąrašo aukščiau
+
+### PVM skaičiavimas Lietuvoje:
+- Standartinis PVM: 21%
+- Sumažintas PVM (knygos, šildymas): 9%
+- Jei PVM = 21%, tai: net_amount = amount / 1.21, vat_amount = amount - net_amount
+
+KRITIŠKAI SVARBU: 
+1. Skaityk KIEKVIENĄ eilutę - neskipink ir nesumuok!
+2. Produktų pavadinimus rašyk LIETUVIŠKAI (kaip čekyje)
+3. Jei tekstas neįskaitomas, grąžink {{"items": []}}"""
         
-        # User prompt with OCR-specific instructions
-        user_prompt = """Analyze this Lithuanian receipt image carefully:
+        # User prompt with Lithuanian-specific instructions
+        user_prompt = """Išanalizuok šį LIETUVIŠKĄ čekį/sąskaitą:
 
-1. Look for the 'Total' or 'Mokėti' amount. It is usually the largest number at the bottom.
-2. Look for VAT/PVM information - it may be shown per item or as a summary at the bottom.
-3. Analyze vendor names carefully (e.g. 'UAB Maxima LT' -> 'Maxima').
-4. If the image is blurry, do your best to guess based on context.
-5. Extract all items with their VAT amounts (total_amount, vat_amount, net_amount).
-6. If VAT is only shown in summary, calculate proportionally (21% standard, 9% for books/heat).
-7. Return all items in the JSON format specified."""
+1. Surask parduotuvės pavadinimą (pvz., MAXIMA, IKI, LIDL, CIRCLE K)
+2. Surask datą (formatas: YYYY-MM-DD)
+3. Išskaityk KIEKVIENĄ produktą su kaina
+4. Surask "VISO" arba "MOKĖTI" sumą apačioje
+5. Surask PVM informaciją (gali būti "PVM 21%" arba "PVM suma")
+6. Priskirk tinkamą kategoriją kiekvienam produktui
+
+SVARBU: Produktų pavadinimus rašyk LIETUVIŠKAI, tiksliai kaip jie parašyti čekyje!
+
+Grąžink JSON su visais produktais."""
 
         # API Call with JSON response format - using GPT-4o (best vision model)
         print("Calling OpenAI API with GPT-4o...")
@@ -458,8 +487,9 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
                     vat = float(item.get('vat_amount', 0))
                     item['net_amount'] = total - vat
             
-            # STRICT Category Validation with Fallback Logic
+            # STRICT Category Validation with Lithuanian keyword support
             original_category = item.get('category', '').strip()
+            description_lower = item.get('description', '').lower()
             
             if original_category not in VALID_CATEGORIES:
                 category_lower = original_category.lower()
@@ -471,54 +501,75 @@ CRITICAL: Extract EVERY item. Do not skip or summarize. If the receipt is illegi
                         matched_category = valid_cat
                         break
                 
-                # Intelligent fallback
+                # Intelligent fallback with Lithuanian keywords
                 if not matched_category:
-                    fallback_map = {
-                        'groceries': 'Maistas',
-                        'food': 'Maistas',
-                        'restaurant': 'Maistas',
-                        'cafe': 'Maistas',
-                        'fuel': 'Transportas',
-                        'gas': 'Transportas',
-                        'parking': 'Transportas',
-                        'cleaning': 'Švara',
-                        'office': 'Biuras',
-                        'stationery': 'Biuras',
-                        'utilities': 'Komunaliniai',
-                        'rent': 'Nuoma',
-                        'housing': 'Nuoma',
-                        'services': 'Paslaugos',
-                        'household': 'Buitinė chemija',
-                        'chemicals': 'Buitinė chemija',
-                        'detergent': 'Buitinė chemija',
-                        'soap': 'Buitinė chemija'
-                    }
+                    # Combined text for keyword matching
+                    search_text = f"{category_lower} {description_lower}"
                     
-                    matched_category = fallback_map.get(category_lower)
+                    # Lithuanian food keywords
+                    food_keywords = [
+                        'maistas', 'food', 'grocer', 'restaurant', 'cafe', 'meal', 'snack',
+                        'duona', 'pienas', 'sviestas', 'kiaušin', 'mėsa', 'višt', 'kiaul', 'jautien',
+                        'žuvis', 'lašiš', 'sūris', 'varškė', 'grietin', 'jogurt', 'kefyr',
+                        'alus', 'vynas', 'sult', 'vanduo', 'kava', 'arbata', 'gėrim',
+                        'cukrus', 'druska', 'milt', 'ryži', 'makaron', 'bulv', 'mork',
+                        'svogūn', 'pomidor', 'agurk', 'obuol', 'banan', 'apelsin',
+                        'saldain', 'šokolad', 'led', 'pyrag', 'bandel', 'sumuštini',
+                        'maxima', 'iki', 'lidl', 'rimi', 'norfa', 'bread', 'milk', 'cheese',
+                        'kebab', 'pica', 'pizza', 'burger', 'kavin', 'restoran'
+                    ]
                     
-                    # Keyword matching
-                    if not matched_category:
-                        if any(keyword in category_lower for keyword in ['food', 'grocer', 'restaurant', 'cafe', 'meal', 'snack', 'bread', 'milk']):
-                            matched_category = 'Maistas'
-                        elif any(keyword in category_lower for keyword in ['fuel', 'gas', 'parking', 'transport', 'car', 'taxi']):
-                            matched_category = 'Transportas'
-                        elif any(keyword in category_lower for keyword in ['detergent', 'soap', 'shampoo', 'washing', 'chemical', 'hygiene', 'household']):
-                            matched_category = 'Buitinė chemija'
-                        elif any(keyword in category_lower for keyword in ['clean', 'cleaning service']):
-                            matched_category = 'Švara'
-                        elif any(keyword in category_lower for keyword in ['office', 'stationery', 'paper', 'pen', 'printer']):
-                            matched_category = 'Biuras'
-                        elif any(keyword in category_lower for keyword in ['utility', 'electric', 'water', 'internet', 'phone']):
-                            matched_category = 'Komunaliniai'
-                        elif any(keyword in category_lower for keyword in ['rent', 'lease', 'housing']):
-                            matched_category = 'Nuoma'
-                        elif any(keyword in category_lower for keyword in ['service', 'repair', 'consult']):
-                            matched_category = 'Paslaugos'
+                    # Lithuanian transport keywords
+                    transport_keywords = [
+                        'transportas', 'fuel', 'gas', 'parking', 'transport', 'car', 'taxi',
+                        'degalai', 'benzin', 'dyzel', 'diesel', 'parkav', 'plovykl',
+                        'tepal', 'aušin', 'circle k', 'viada', 'orlen', 'neste',
+                        'autoservis', 'autobus', 'traukin', 'taksi'
+                    ]
+                    
+                    # Lithuanian household chemicals keywords
+                    chemistry_keywords = [
+                        'buitin', 'chemij', 'detergent', 'soap', 'shampoo', 'washing', 'chemical', 'hygiene', 'household',
+                        'skalbim', 'plovikl', 'valikl', 'dezodorant', 'šampūn', 'muil',
+                        'dantų past', 'tualetinis popier', 'servetėl', 'kapsul', 'minkštikl',
+                        'balikl', 'higienos', 'wc', 'grindų'
+                    ]
+                    
+                    # Lithuanian office keywords
+                    office_keywords = [
+                        'office', 'stationery', 'paper', 'pen', 'printer', 'biuras',
+                        'popier', 'rašikl', 'sąsiuvin', 'segtuk', 'vokai', 'spausdint', 'rašal',
+                        'kanceliar'
+                    ]
+                    
+                    # Lithuanian utilities keywords
+                    utilities_keywords = [
+                        'utility', 'electric', 'water', 'internet', 'phone', 'komunalin',
+                        'elektr', 'vanden', 'duj', 'šildym', 'telefon', 'telia', 'tele2', 'bite'
+                    ]
+                    
+                    # Check keywords
+                    if any(kw in search_text for kw in food_keywords):
+                        matched_category = 'Maistas'
+                    elif any(kw in search_text for kw in transport_keywords):
+                        matched_category = 'Transportas'
+                    elif any(kw in search_text for kw in chemistry_keywords):
+                        matched_category = 'Buitinė chemija'
+                    elif any(kw in search_text for kw in office_keywords):
+                        matched_category = 'Biuras'
+                    elif any(kw in search_text for kw in utilities_keywords):
+                        matched_category = 'Komunaliniai'
+                    elif any(kw in search_text for kw in ['clean', 'valym', 'švara']):
+                        matched_category = 'Švara'
+                    elif any(kw in search_text for kw in ['rent', 'lease', 'nuom', 'būst']):
+                        matched_category = 'Nuoma'
+                    elif any(kw in search_text for kw in ['service', 'repair', 'paslaug', 'remont', 'konsult']):
+                        matched_category = 'Paslaugos'
                 
                 # Final fallback to 'Kiti'
                 if not matched_category:
                     matched_category = 'Kiti'
-                    print(f"⚠ Category fallback: '{original_category}' → 'Kiti'")
+                    print(f"⚠ Category fallback: '{original_category}' (desc: {description_lower[:30]}) → 'Kiti'")
                 
                 item['category'] = matched_category
             
